@@ -13,6 +13,10 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
+#include "franka_custom_controllers/mission_manager.hpp"
+
+
+
 
 
 
@@ -20,11 +24,8 @@ namespace franka_custom_controllers {
 
 bool JointVelocityController::init(hardware_interface::RobotHW* robot_hardware,
                                           ros::NodeHandle& node_handle) {
-
-  sub_equilibrium_pose_ = node_handle.subscribe(
-      "equilibrium_pose", 20, &JointVelocityController::equilibriumPoseCallback, this,
-      ros::TransportHints().reliable().tcpNoDelay());
   
+
 
   velocity_joint_interface_ = robot_hardware->get<hardware_interface::VelocityJointInterface>();
   if (velocity_joint_interface_ == nullptr) {
@@ -91,11 +92,16 @@ bool JointVelocityController::init(hardware_interface::RobotHW* robot_hardware,
         << ex.what());
     return false;
   }
+  tf_listener_ = std::make_shared<tf::TransformListener>();
+  mission_manager_ = std::make_unique<MissionManager>();
+  robot_state_ = std::make_unique<franka_state>(node_handle, *tf_listener_, *mission_manager_);
+  task_priority_ = std::make_unique<task_priority>(node_handle, *tf_listener_, *mission_manager_, *robot_state_);
   
-  position_d_.setZero();
-  orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  position_d_target_.setZero();
-  orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  // initialize desired pose to zero
+  //position_d_.setZero();
+  //orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  //position_d_target_.setZero();
+  //orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
   
 
   return true;
@@ -111,17 +117,15 @@ void JointVelocityController::starting(const ros::Time& /* time */) {
   // convert to eigen
   Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
   Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
-  
-  // set equilibrium point to current state
-  position_d_ = initial_transform.translation();
-  orientation_d_ = Eigen::Quaterniond(initial_transform.rotation());
-  position_d_target_ = initial_transform.translation();
-  orientation_d_target_ = Eigen::Quaterniond(initial_transform.rotation());
+  Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+  // initialize robot state
+  robot_state_->Init(q_initial, initial_transform, jacobian);
+  // initialize mission manager
+  mission_manager_->Init();
   // set gains
   position_gain_ = 100.0;
   orientation_gain_ = 100.0;
-  // set nullspace equilibrium configuration to initial q
-  q_d_nullspace_ = q_initial;
+ 
 }
 
 void JointVelocityController::update(const ros::Time& /* time */,
@@ -133,50 +137,28 @@ void JointVelocityController::update(const ros::Time& /* time */,
 
   // convert to Eigen
   Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
-  Eigen::Map<Eigen::Matrix<double, 7, 1>> q(robot_state.q.data());
-  //Eigen::Map<Eigen::Matrix<double, 7, 1>> dq(robot_state.dq.data());
 
-  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
-  Eigen::Vector3d position(transform.translation());
-  Eigen::Quaterniond orientation(transform.rotation());
+  robot_state_->setZeroJacobian(jacobian);
+  // update jacobians and trasformMatrices
+  robot_state_->updateState();
+ 
+  if(tf_listener_->frameExists("goal_frame")){
+      robot_state_->computeTaskReference();
+      robot_state_->computeActivationFunction();
+      }
+  // update task priority 
+  task_priority_->updateTaskPriority( );
 
-  // compute error to desired pose
-  // position error
-  Eigen::Matrix<double, 6, 1> error ;
-  error.head(3) << position - position_d_;
-
-  // orientation error
-  if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
-    orientation.coeffs() << -orientation.coeffs();
-  }
-  // "difference" quaternion
-  Eigen::Quaterniond error_quaternion(orientation.inverse() * orientation_d_);
-  error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
-  // Transform to base frame
-  error.tail(3) << -transform.rotation() * error.tail(3);
-  
-  // compute desired velocity in Cartesian space
-  Eigen::Matrix<double, 6, 1> x_dot;
-  x_dot.head(3) << position_gain_ * error.head(3);  
-  x_dot.tail(3) << orientation_gain_ * error.tail(3);                               
-  
   // compute control
   // allocate joint velocities
   Eigen::VectorXd q_dot(7);
-
   // compute joint velocities
-  q_dot << jacobian.transpose() *
-           (- x_dot );
+  q_dot << task_priority_->getydotbarResult();
   // set joint velocities
   for (size_t i = 0; i < velocity_joint_handles_.size(); ++i) {
     velocity_joint_handles_[i].setCommand(q_dot(i));
   }
-
-  // update desired pose to target pose 
-  std::lock_guard<std::mutex> position_d_target_mutex_lock(
-      position_and_orientation_d_target_mutex_);
-  position_d_ = position_d_target_;
-  orientation_d_ = orientation_d_target_;
+  task_priority_->UpdateMissionPhase();
   
 }
 
@@ -184,20 +166,6 @@ void JointVelocityController::stopping(const ros::Time& /*time*/) {
   // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
   // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
   // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
-}
-
-void JointVelocityController::equilibriumPoseCallback(
-    const geometry_msgs::PoseStampedConstPtr& msg) {
-       
-  std::lock_guard<std::mutex> position_d_target_mutex_lock(
-      position_and_orientation_d_target_mutex_);
-  position_d_target_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
-  Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
-  orientation_d_target_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
-      msg->pose.orientation.z, msg->pose.orientation.w;
-  if (last_orientation_d_target.coeffs().dot(orientation_d_target_.coeffs()) < 0.0) {
-    orientation_d_target_.coeffs() << -orientation_d_target_.coeffs();
-  }
 }
 
 }  // namespace franka_custom_controllers

@@ -13,11 +13,16 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <ros/node_handle.h>
+#include <tf/transform_listener.h>
 #include <ros/time.h>
 #include <Eigen/Dense>
 
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
+#include "franka_custom_controllers/mission_manager.hpp"
+#include "franka_custom_controllers/task_priority.h"
+#include "franka_custom_controllers/my_utils.hpp"
+#include "franka_custom_controllers/franka_data.h"
 
 namespace franka_custom_controllers {
 
@@ -30,7 +35,8 @@ class JointVelocityController : public controller_interface::MultiInterfaceContr
   void update(const ros::Time&, const ros::Duration& period) override;
   void starting(const ros::Time&) override;
   void stopping(const ros::Time&) override;
-
+  
+                                            
  private:
   hardware_interface::VelocityJointInterface* velocity_joint_interface_;
   std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
@@ -43,15 +49,14 @@ class JointVelocityController : public controller_interface::MultiInterfaceContr
   
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
-  Eigen::Vector3d position_d_;
-  Eigen::Quaterniond orientation_d_;
-  std::mutex position_and_orientation_d_target_mutex_;
-  Eigen::Vector3d position_d_target_;
-  Eigen::Quaterniond orientation_d_target_;
   
-  // Equilibrium pose subscriber
-  ros::Subscriber sub_equilibrium_pose_;
-  void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
+  // Customization: 
+  std::unique_ptr<franka_state> robot_state_;
+  std::unique_ptr<task_priority> task_priority_;
+  std::unique_ptr<MissionManager> mission_manager_;
+  std::shared_ptr<tf::TransformListener> tf_listener_;
+  
+
 };
 
 }  // namespace franka_custom_controllers

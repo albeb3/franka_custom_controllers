@@ -23,10 +23,12 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   urdf
   visualization_msgs
+  task_priority
 )
 
 find_package(Eigen3 REQUIRED)
 find_package(Franka 0.9.0 QUIET)
+
 if(NOT Franka_FOUND)
   find_package(Franka 0.8.0 REQUIRED)
 endif()
@@ -114,6 +116,7 @@ target_link_libraries(tf_links_wrt_world_node
 target_link_libraries(gripper_node
   ${catkin_LIBRARIES}
 )
+
 ## Installation
 install(TARGETS franka_custom_controllers
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -4,7 +4,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 
 std::string child_frame_id_ = "goal_frame";
-std::string frame_id_ = "robot_odom";
+std::string frame_id_ = "panda_R_link0";
 
 int main(int argc, char** argv){
   ros::init(argc, argv, "tf_broadcaster_node");
@@ -20,12 +20,12 @@ int main(int argc, char** argv){
     transform.header.frame_id = frame_id_;
     transform.child_frame_id = child_frame_id_;
 
-    transform.transform.translation.x = 1.0;
+    transform.transform.translation.x = 0.5;
     transform.transform.translation.y = 0.0;
-    transform.transform.translation.z = 0.0;
+    transform.transform.translation.z = 0.5;
 
     tf2::Quaternion q;
-    q.setRPY(0, 0, 0);
+    q.setRPY(M_PI, 0, 0);
     transform.transform.rotation.x = q.x();
     transform.transform.rotation.y = q.y();
     transform.transform.rotation.z = q.z();
