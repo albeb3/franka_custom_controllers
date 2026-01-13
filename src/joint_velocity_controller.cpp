@@ -16,149 +16,22 @@
 #include "franka_custom_controllers/mission_manager.hpp"
 
 
-
-
-
-
 namespace franka_custom_controllers {
 
 bool JointVelocityController::init(hardware_interface::RobotHW* robot_hardware,
                                           ros::NodeHandle& node_handle) {
-  
-
-
-  velocity_joint_interface_ = robot_hardware->get<hardware_interface::VelocityJointInterface>();
-  if (velocity_joint_interface_ == nullptr) {
-    ROS_ERROR(
-        "JointVelocityController: Error getting velocity joint interface from hardware!");
-    return false;
-  }
-
-  std::string arm_id;
-  if (!node_handle.getParam("arm_id", arm_id)) {
-    ROS_ERROR("JointVelocityController: Could not get parameter arm_id");
-    return false;
-  }
-
-  std::vector<std::string> joint_names;
-  if (!node_handle.getParam("joint_names", joint_names)) {
-    ROS_ERROR("JointVelocityController: Could not parse joint names");
-  }
-  if (joint_names.size() != 7) {
-    ROS_ERROR_STREAM("JointVelocityController: Wrong number of joint names, got "
-                     << joint_names.size() << " instead of 7 names!");
-    return false;
-  }
-  auto* model_interface = robot_hardware->get<franka_hw::FrankaModelInterface>();
-  if (model_interface == nullptr) {
-    ROS_ERROR_STREAM(
-        "JointVelocityController: Error getting model interface from hardware");
-    return false;
-  }
-  try {
-    model_handle_ = std::make_unique<franka_hw::FrankaModelHandle>(
-        model_interface->getHandle(arm_id + "_model"));
-  } catch (hardware_interface::HardwareInterfaceException& ex) {
-    ROS_ERROR_STREAM(
-        "JointVelocityController: Exception getting model handle from interface: "
-        << ex.what());
-    return false;
-  }
-
-
-  velocity_joint_handles_.resize(7);
-  for (size_t i = 0; i < 7; ++i) {
-    try {
-      velocity_joint_handles_[i] = velocity_joint_interface_->getHandle(joint_names[i]);
-    } catch (const hardware_interface::HardwareInterfaceException& ex) {
-      ROS_ERROR_STREAM(
-          "JointVelocityController: Exception getting joint handles: " << ex.what());
-      return false;
-    }
-  }
-
-  auto state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
-  if (state_interface == nullptr) {
-    ROS_ERROR("JointVelocityController: Could not get state interface from hardware");
-    return false;
-  }
-
- try {
-    state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
-        state_interface->getHandle(arm_id + "_robot"));
-  } catch (hardware_interface::HardwareInterfaceException& ex) {
-    ROS_ERROR_STREAM(
-        "CartesianImpedanceExampleController: Exception getting state handle from interface: "
-        << ex.what());
-    return false;
-  }
-  tf_listener_ = std::make_shared<tf::TransformListener>();
-  mission_manager_ = std::make_unique<MissionManager>();
-  robot_state_ = std::make_unique<franka_state>(node_handle, *tf_listener_, *mission_manager_);
-  task_priority_ = std::make_unique<task_priority>(node_handle, *tf_listener_, *mission_manager_, *robot_state_);
-  
-  // initialize desired pose to zero
-  //position_d_.setZero();
-  //orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  //position_d_target_.setZero();
-  //orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  
-
-  return true;
+    task_priority_ = std::make_unique<task_priority>(node_handle);                                         
+    return task_priority_->init(robot_hardware);
 }
 
 void JointVelocityController::starting(const ros::Time& /* time */) {
-  // compute initial velocity with jacobian and set x_attractor and q_d_nullspace
-  // to initial configuration
-  franka::RobotState initial_state = state_handle_->getRobotState();
-  // get jacobian
-  std::array<double, 42> jacobian_array =
-      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
-  // convert to eigen
-  Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
-  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
-  Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
-  // initialize robot state
-  robot_state_->Init(q_initial, initial_transform, jacobian);
-  // initialize mission manager
-  mission_manager_->Init();
-  // set gains
-  position_gain_ = 100.0;
-  orientation_gain_ = 100.0;
- 
+    task_priority_->starting();
 }
 
 void JointVelocityController::update(const ros::Time& /* time */,
                                             const ros::Duration& /* period */) {
-  // get state variables
-  franka::RobotState robot_state = state_handle_->getRobotState();
-  std::array<double, 42> jacobian_array =
-      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
-
-  // convert to Eigen
-  Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
-
-  robot_state_->setZeroJacobian(jacobian);
-  // update jacobians and trasformMatrices
-  robot_state_->updateState();
- 
-  if(tf_listener_->frameExists("goal_frame")){
-      robot_state_->computeTaskReference();
-      robot_state_->computeActivationFunction();
-      }
-  // update task priority 
-  task_priority_->updateTaskPriority( );
-
-  // compute control
-  // allocate joint velocities
-  Eigen::VectorXd q_dot(7);
-  // compute joint velocities
-  q_dot << task_priority_->getydotbarResult();
-  // set joint velocities
-  for (size_t i = 0; i < velocity_joint_handles_.size(); ++i) {
-    velocity_joint_handles_[i].setCommand(q_dot(i));
-  }
-  task_priority_->UpdateMissionPhase();
+    task_priority_->update();
+   
   
 }
 

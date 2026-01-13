@@ -22,7 +22,10 @@
 #include "geometry_msgs/TransformStamped.h"
 #include <iostream>
 #include <geometry_msgs/Transform.h>
+#include <std_msgs/Bool.h>
 #include <string>
+#include <boost/bind/bind.hpp>
+#include <tf/transform_listener.h>
 
 // CONFIGURATION PARAMETERS-------------------------------------------------------------------------------------------------------
 // child_frame_id_: name of the joystick control frame (e.g., left_hand or right_hand)
@@ -59,7 +62,43 @@ void StartConfiguration(geometry_msgs::TransformStamped start_PandaLink0_T_Panda
     rotation_z_ = start_PandaLink0_T_PandaEE.transform.rotation.z;
     rotation_w_ = start_PandaLink0_T_PandaEE.transform.rotation.w;
 }
+void SetConfiguration(tf::TransformListener& tf_listener){
+    tf::StampedTransform start_PandaLink0_T_PandaEE;
+    try {
+        tf_listener.lookupTransform("panda_R_link0", "panda_R_EE", ros::Time(0), start_PandaLink0_T_PandaEE);
+    }
+    catch (tf::TransformException &ex) {
+        ROS_ERROR("TF lookup failed: %s", ex.what());
+        return;
+    }
+    translation_x_ = start_PandaLink0_T_PandaEE.getOrigin().x();
+    translation_y_ = start_PandaLink0_T_PandaEE.getOrigin().y();
+    translation_z_ = start_PandaLink0_T_PandaEE.getOrigin().z();
+    rotation_x_ = start_PandaLink0_T_PandaEE.getRotation().x();
+    rotation_y_ = start_PandaLink0_T_PandaEE.getRotation().y();
+    rotation_z_ = start_PandaLink0_T_PandaEE.getRotation().z();
+    rotation_w_ = start_PandaLink0_T_PandaEE.getRotation().w();
+}
+// function to set transform matrix of EE pose wrt base frame
+void Callback_return_to_mission(const std_msgs::Bool::ConstPtr& msg, tf::TransformListener* tf_listener){
+    if (msg->data){
+    std::cout << "Return to mission command received for " << child_frame_id_ << std::endl;
 
+        // Reset the control frame to the initial configuration
+        SetConfiguration(*tf_listener);
+    }
+}
+void Callback_follow_EE(const std_msgs::Bool::ConstPtr& msg, tf::TransformListener* tf_listener){
+    if(msg->data){
+        std::cout << "Received velocity command" << child_frame_id_ << std::endl;
+    }
+    if (!msg->data){
+        std::cout << "Follow EE command received for " << child_frame_id_ << std::endl;
+
+        // Reset the control frame to the current EE configuration
+        SetConfiguration(*tf_listener);
+    }
+}
 // Saturation function to limit the maximum velocity
 double saturate(double val)
 { 
@@ -71,7 +110,6 @@ double saturate(double val)
 // Callback function for receiving joystick translational velocity commands
 void Callback_target_translational_velocity(const geometry_msgs::Vector3::ConstPtr& msg)
 {
-    std::cout << "Received velocity command" << child_frame_id_ << std::endl;
     translation_x_ += (deltat_*saturate(msg->z));
     translation_y_ += (deltat_*saturate(-msg->x));
     translation_z_ += (deltat_*saturate(msg->y));
@@ -112,7 +150,8 @@ int main(int argc, char** argv){
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener tfListener(tfBuffer);
     tf2_ros::TransformBroadcaster broadcaster;
-    
+    std::shared_ptr<tf::TransformListener> tf_listener_ptr= std::make_shared<tf::TransformListener>();
+  
     // Routine for setting the initial pose of the control frame as the current pose of the end-effector
     // -------------------------------------------------------->USE StartConfiguration(start_PandaLink0_T_PandaEE) TO RESET THE INITIAL POSE!!!!
     ROS_INFO("Waiting for panda_R_link0_T_panda_R_EE...");
@@ -130,17 +169,19 @@ int main(int argc, char** argv){
 
     // ROS Subscribers and Publishers definition
     // pub_PositionJoystick publishes the equilibrium pose to the interactive_joystick node of franka_example_controllers package (my customized version of the original interactive_marker node)
-    ros::Publisher pub_PositionJoystick = node.advertise<geometry_msgs::PoseStamped>("panda_R/joystick_equilibrium_pose", 10);
+    //ros::Publisher pub_PositionJoystick = node.advertise<geometry_msgs::PoseStamped>("panda_R/joystick_equilibrium_pose", 10);
     // Subscribers for receiving target angular and translational velocities of meta joystick commands from Unity
     ros::Subscriber sub_angular_velocity = node.subscribe("/target_angular_velocity/"+child_frame_id_, 10, Callback_target_angular_velocity);
     ros::Subscriber sub_translational_velocity = node.subscribe("/target_translational_velocity/"+child_frame_id_, 10, Callback_target_translational_velocity);
+    ros::Subscriber sub_return_to_mission = node.subscribe<std_msgs::Bool>("/panda_R/my_joint_velocity_controller/return_to_mission/", 10,boost::bind(&Callback_return_to_mission, _1, tf_listener_ptr.get()));
+    ros::Subscriber sub_follow_EE = node.subscribe<std_msgs::Bool>("/panda_R/my_joint_velocity_controller/teleop_cmd_received/", 10,boost::bind(&Callback_follow_EE, _1, tf_listener_ptr.get()));
 
     ros::Rate rate(100.0);
 
     while (ros::ok()){// prepare a single TransformStamped and send it
         // Update and publish the transform and pose based on the integrated velocities
         transform_hand_displayed_.header.frame_id = frame_id_;
-        transform_hand_displayed_.child_frame_id = child_frame_id_;
+        transform_hand_displayed_.child_frame_id = "panda_R_teleop_frame";
         transform_hand_displayed_.header.stamp = ros::Time::now();
         transform_hand_displayed_.transform.translation.x = translation_x_;
         transform_hand_displayed_.transform.translation.y = translation_y_;
@@ -160,7 +201,7 @@ int main(int argc, char** argv){
         transform_joystick.pose.orientation = quat;
         // Broadcast the updated transform and publish the pose
         broadcaster.sendTransform(transform_hand_displayed_);
-        pub_PositionJoystick.publish(transform_joystick);
+        //pub_PositionJoystick.publish(transform_joystick);
         ros::spinOnce();
         rate.sleep();
     }

@@ -211,8 +211,27 @@ CartErrorResult CartError(const Eigen::Matrix4d& T1, const Eigen::Matrix4d& T2){
     // orientation error
     Eigen::Matrix3d R1 = T1.block<3,3>(0,0);
     Eigen::Matrix3d R2 = T2.block<3,3>(0,0);
-    result.ori_error = VersorLemma(R1, R2);
+    result.ori_error = VersorLemma(R1, R2)*(-1.0);
     return result;
+}
+Eigen::MatrixXd Saturate(const Eigen::MatrixXd& x, double xmax){
+    int n = x.size();
+    double max=0;
+    Eigen::MatrixXd out;
+    for (int i=0; i<n; i++){
+        if (std::abs(x(i)) > max){
+            max = std::abs(x(i));
+        }
+    }
+    if (max > xmax){
+        out = (x / max) * xmax;
+        return out;
+    }
+    else{
+        out = x;
+        return out;
+        
+    }
 }
 #endif // MY_UTILS_HPP
 

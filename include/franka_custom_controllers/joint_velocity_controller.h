@@ -38,22 +38,9 @@ class JointVelocityController : public controller_interface::MultiInterfaceContr
   
                                             
  private:
-  hardware_interface::VelocityJointInterface* velocity_joint_interface_;
-  std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
-  std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
-  std::vector<hardware_interface::JointHandle> velocity_joint_handles_;
+ 
   ros::Duration elapsed_time_;
-
-  double position_gain_;
-  double orientation_gain_;
-  
-  Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
-  Eigen::Matrix<double, 7, 1> q_d_nullspace_;
-  
-  // Customization: 
-  std::unique_ptr<franka_state> robot_state_;
   std::unique_ptr<task_priority> task_priority_;
-  std::unique_ptr<MissionManager> mission_manager_;
   std::shared_ptr<tf::TransformListener> tf_listener_;
   
 

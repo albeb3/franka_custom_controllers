@@ -42,6 +42,9 @@
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>task_priority</exec_depend>
+  <exec_depend>matplotlib</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  
   
 
   <export>

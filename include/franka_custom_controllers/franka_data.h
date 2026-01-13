@@ -20,27 +20,34 @@
 
 struct Trasform_matrices{
     // Transformation matrices
-    Eigen::Matrix<double, 4,4> w_T_b,w_T_e;
+    Eigen::Matrix<double, 4,4> b_T_e,b_T_g,b_T_gteleop;
 };
 
 struct Jacobians{
     // Jacobian of goal position projected on vehicle frame
     Eigen::Matrix<double, 6, 7> Jee ;
-    //Eigen::Matrix<double, 6, 7> Jteleop;
+    Eigen::Matrix<double, 7, 7> Jjl;
+    Eigen::Matrix<double, 6, 7> Jteleop;
 };
 struct Action_transitions{
     Eigen::Matrix<double, 6,6> A_ee;
-    //Eigen::Matrix<double, 6,6> A_teleop;
+    Eigen::Matrix<double, 7,7> A_jl;
+    Eigen::Matrix<double, 6,6> A_teleop;
 };
 struct Task_references{
     Eigen::Matrix<double, 6,1> xdot_g_pos;
-    //Eigen::Matrix<double, 6,1> xdot_teleop;
+    Eigen::Matrix<double, 7,1> xdot_jl;
+    Eigen::Matrix<double, 6,1> xdot_teleop;
 };
 struct robot_state{
     // franka joint position 
     Eigen::Matrix<double, 7,1> q;
     // joint velocities
     Eigen::Matrix<double, 7,1> q_dot;
+    // joint limits 
+    const Eigen::Matrix<double, 7,1> joint_lower_limits = (Eigen::Matrix<double,7,1>() << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973).finished();
+    const Eigen::Matrix<double, 7,1> joint_upper_limits = (Eigen::Matrix<double,7,1>() << 2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973).finished();
+    //
     Trasform_matrices trasform_matrices;
     Action_transitions action_transitions;
     Jacobians jacobians;
@@ -51,175 +58,319 @@ class franka_state{
 
     private:
     
-    tf::TransformListener& tf_listener_;
-    ros::NodeHandle& nh_;
-    ros::Subscriber sub_goal_pose_ ;
-    std::mutex position_and_orientation_d_target_mutex_;
-    Eigen::Vector3d position_d_;
-    Eigen::Quaterniond orientation_d_;
-    Eigen::Matrix<double,7,1> q_d_nullspace_;
-
-    Eigen::Vector3d position_d_target_;
-    Eigen::Quaterniond orientation_d_target_;
-
-    
-        
-    
-    //bool teleop_cmd_received_ = false;
-    //bool return_to_mission_ = false;
-    
-   
-    void computeJacobian(){
-
-    };
-    void updateTransform(){
-        tf::StampedTransform tf;
-        Eigen::Affine3d eigen_tf;
-        if (tf_listener_.frameExists("world") && tf_listener_.frameExists("panda_R_link0")){
-        
-            tf_listener_.lookupTransform("world", "panda_R_link0", ros::Time(0), tf);
-            tf::transformTFToEigen(tf, eigen_tf);
-             robot_state_.trasform_matrices.w_T_b = eigen_tf.matrix() ;
-        }
-        if(tf_listener_.frameExists("panda_R_link0") && tf_listener_.frameExists("panda_R_linkEE")){
-        
-            tf_listener_.lookupTransform("panda_R_link0", "panda_R_linkEE", ros::Time(0), tf);
-            tf::transformTFToEigen(tf, eigen_tf);
-             robot_state_.trasform_matrices.w_T_e = eigen_tf.matrix() ;
-        }
-        
-       
-
-    };
-    
-    public:
-    MissionManager& mission_manager_;
-   robot_state robot_state_;
-   bool goal_frame_exists_ = false;
-    franka_state(ros::NodeHandle& nh,tf::TransformListener& tf_listener,MissionManager& mission_manager) 
-                                        : nh_(nh), tf_listener_(tf_listener), mission_manager_(mission_manager) {
-        
-    };
-    ~franka_state()= default;
-    void Init(Eigen::Matrix<double,7,1> q_init, Eigen::Affine3d initial_transform, Eigen::Matrix<double,6,7> jacobian){
-        // set equilibrium point to current state
-        position_d_ = initial_transform.translation();
-        orientation_d_ = Eigen::Quaterniond(initial_transform.rotation());
-        position_d_target_ = initial_transform.translation();
-        orientation_d_target_ = Eigen::Quaterniond(initial_transform.rotation());
-        // set initial transform
-        robot_state_.trasform_matrices.w_T_e = initial_transform.matrix();
-        // set initial jacobian
-        robot_state_.jacobians.Jee= jacobian;
-         // set nullspace equilibrium configuration to initial q
-        q_d_nullspace_ = q_init ;
-
-    };
-    void updateState(){
-        updateTransform();
-        computeJacobian();
-    };
-    void setZeroJacobian(Eigen::Matrix<double,6,7> b_Jee){
-        //refer jacobian to world frame throught trasformation matrix
-
-        //robot_state_.jacobians.Jee.block<3,7>(0,0) = robot_state_.trasform_matrices.w_T_b.block<3,3>(0,0) * b_Jee.block<3,7>(0,0);
-        //robot_state_.jacobians.Jee.block<3,7>(3,0) = robot_state_.trasform_matrices.w_T_b.block<3,3>(0,0) * b_Jee.block<3,7>(3,0);
-        robot_state_.jacobians.Jee = b_Jee;
-        
-    };
-    
-    void computeTaskReference(){
-        /*// update desired pose to target pose 
-        std::lock_guard<std::mutex> position_d_target_mutex_lock(position_and_orientation_d_target_mutex_);
-        position_d_ = position_d_target_;
-        orientation_d_ = orientation_d_target_;
-         if(tf_listener_.frameExists("goal_frame")){
-            // position error
-            Eigen::Matrix<double, 6, 1> error ;
-            error.head(3) << robot_state_.b_p_e  - position_d_;
-            // orientation error
-            Eigen::Quaterniond current_orientation(robot_state_.b_rot_e);
-            if (orientation_d_.coeffs().dot(current_orientation.coeffs()) < 0.0) {
-                current_orientation.coeffs() << -current_orientation.coeffs();
-            }
-            // "difference" quaternion
-            Eigen::Quaterniond error_quaternion(current_orientation.inverse() * orientation_d_);
-            error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
-            // Transform to base frame
-            error.tail(3) << -current_orientation.toRotationMatrix() * error.tail(3);
-            // compute desired velocity in Cartesian space
-            Eigen::Matrix<double, 6, 1> x_dot;
-            x_dot.head(3) <<  error.head(3);  
-            x_dot.tail(3) <<  error.tail(3);
-            robot_state_.task_references.xdot_g_pos = x_dot;
-            }*/
-        if(tf_listener_.frameExists("goal_frame")){
-            Eigen::Matrix<double, 4,4> w_T_g,w_T_e;
-            tf::StampedTransform tf;
-            Eigen::Affine3d eigen_tf;
-            try{
-                tf_listener_.lookupTransform("panda_R_link0", "goal_frame", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                w_T_g =  eigen_tf.matrix();
-            }
-            catch (tf::TransformException &ex) {
-                ROS_WARN("%s",ex.what());
-                return;
-            }
-            try{
-                tf_listener_.lookupTransform("panda_R_link0", "panda_R_EE", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                w_T_e =  eigen_tf.matrix();
-            }
-            catch (tf::TransformException &ex) {
-                ROS_WARN("%s",ex.what());
-                return;
-            }
-            CartErrorResult cart_error = CartError(w_T_g,w_T_e );
+        tf::TransformListener& tf_listener_;
+        ros::NodeHandle& nh_;
+        std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
+        std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
+        MissionManager& mission_manager_;
+        robot_state robot_state_;
+        std::string arm_id_;
+        // teleop variables
+        bool teleop_cmd_received_= false;
+        bool return_to_mission_= false;
+        ros::Subscriber teleop_cmd_sub_;
+        ros::Subscriber return_to_mission_sub_;
+        // teleop callbacks
+        void teleopCmdCallback(const std_msgs::Bool::ConstPtr& msg){
+            //std::cout << "Teleop command received: " << msg->data << std::endl;
+            teleop_cmd_received_ = msg->data;
+        };
+        void returnToMissionCallback(const std_msgs::Bool::ConstPtr& msg){
             
-            Eigen::Matrix<double, 6, 1> error ;
-            // orientation error
-            error.head(3) <<  cart_error.ori_error ;
-            // position error
-            error.tail(3) <<  cart_error.pos_error ;
-            std::cout << "EE pose: \n" << w_T_e.block<3,1>(0,3) << std::endl;
-            std::cout << "Goal pose: \n" << w_T_g.block<3,1>(0,3) << std::endl;
-            std::cout << "Position error: \n" << cart_error.pos_error << std::endl;
-            
-            // compute desired velocity in Cartesian space
-            Eigen::Matrix<double, 6, 1> x_dot;
-            x_dot.head(3) <<  0.5*error.head(3);  
-            x_dot.tail(3) <<  0.5*error.tail(3);
-            robot_state_.task_references.xdot_g_pos = x_dot;
-        }
-    };
-    void computeActivationFunction(){
+            return_to_mission_ = msg->data;
+            std::cout << "Return to mission command received: " << return_to_mission_ << std::endl;
+        };
+        
+
+        
+        void computeJacobian(){
+            // get jacobian 
+            std::array<double, 42> jacobian_array =
+                model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
+            Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+            robot_state_.jacobians.Jee = jacobian;
+            // set joint limit jacobian as identity
+            robot_state_.jacobians.Jjl = Eigen::Matrix<double,7,7>::Identity(); 
+            // set teleop jacobian as end-effector jacobian
+            robot_state_.jacobians.Jteleop = jacobian;
+        };
+        void updateTransform(){
+            // update end-effector transform
+            franka::RobotState robot_state = state_handle_->getRobotState();
+            Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+            robot_state_.trasform_matrices.b_T_e = transform.matrix();
+            // update goal transform if exists
+            if(GetGoalFrameExists("goal_frame")){
+                tf::StampedTransform tf;
+                Eigen::Affine3d eigen_tf;
+                try{
+                    tf_listener_.lookupTransform(arm_id_+"_link0", "goal_frame_" + arm_id_, ros::Time(0), tf);
+                    tf::transformTFToEigen(tf, eigen_tf);
+                    robot_state_.trasform_matrices.b_T_g =  eigen_tf.matrix();
+                    
+                }
+                catch (tf::TransformException &ex) {
+                    ROS_WARN("%s",ex.what());
+                    return;
+                }
+            }
+            if(GetGoalFrameExists(arm_id_+"_teleop_frame")){
+                tf::StampedTransform tf;
+                Eigen::Affine3d eigen_tf;
+                try{
+                    tf_listener_.lookupTransform(arm_id_+"_link0", arm_id_+"_teleop_frame", ros::Time(0), tf);
+                    tf::transformTFToEigen(tf, eigen_tf);
+                    robot_state_.trasform_matrices.b_T_gteleop =  eigen_tf.matrix();
+                    
+                }
+                catch (tf::TransformException &ex) {
+                    ROS_WARN("%s",ex.what());
+                    return;
+                }
+            }
+        };
+        void computeTaskReference(){
+            // compute joint limit avoidance velocities
+            for (size_t i=0; i<7; i++){
+                double mean_joint_position = (robot_state_.joint_lower_limits(i) + robot_state_.joint_upper_limits(i)) / 2.0;
+                if (robot_state_.q(i) < mean_joint_position){
+                    robot_state_.task_references.xdot_jl(i) = 0.2* (robot_state_.joint_lower_limits(i)-robot_state_.q(i) + 0.01) ;
+                }else{
+                    robot_state_.task_references.xdot_jl(i) = 0.2* (robot_state_.joint_upper_limits(i)-robot_state_.q(i) - 0.01) ;
+                }
+            }
+            // compute goal position velocity if goal frame exists
+            switch (mission_manager_.GetPhase())
+            {
+            case 0: // approach phase
+                {
+                robot_state_.task_references.xdot_g_pos = Eigen::Matrix<double,6,1>::Zero();
+                break; 
+                }
+            case 1: // reaching goal phase
+                {
+                CartErrorResult cart_error = CartError( robot_state_.trasform_matrices.b_T_g,robot_state_.trasform_matrices.b_T_e);
+                Eigen::Matrix<double, 6, 1> error ;
+                error.head(3) = cart_error.pos_error;
+                error.tail(3) = cart_error.ori_error;
+                Eigen::Matrix<double, 6, 1> x_dot;
+                x_dot.head(3) <<  0.9*error.head(3);  
+                x_dot.tail(3) <<  0.9*error.tail(3);
+                x_dot = Saturate( x_dot, 0.8);
+                robot_state_.task_references.xdot_g_pos = x_dot;
+                }
+                break;
+            case 2: // stop phase
+                {
+                robot_state_.task_references.xdot_g_pos = Eigen::Matrix<double,6,1>::Zero();
+                break; 
+                }
+            case 3: // teleop phase
+                {
+                CartErrorResult cart_error_teleop = CartError( robot_state_.trasform_matrices.b_T_gteleop,robot_state_.trasform_matrices.b_T_e);
+                Eigen::Matrix<double, 6, 1> error_teleop ;
+                error_teleop.head(3) = cart_error_teleop.pos_error;
+                error_teleop.tail(3) = cart_error_teleop.ori_error;
+                Eigen::Matrix<double, 6, 1> x_dot_teleop;
+                x_dot_teleop.head(3) <<  5*error_teleop.head(3);  
+                x_dot_teleop.tail(3) <<  5*error_teleop.tail(3);
+                x_dot_teleop = Saturate( x_dot_teleop, 0.8);
+                robot_state_.task_references.xdot_teleop = x_dot_teleop;
+                }
+                break;
+            default:
+                break;
+            }
+        };
+        void computeActivationFunction(){
         mission_manager_.UpdateMissionData();
         std::vector<std::string> prev_action = mission_manager_.GetPrevAction();
         std::vector<std::string> curr_action = mission_manager_.GetCurrAction();
         double phase_time = mission_manager_.GetPhaseTime();
+        // Compute joint limit activation matrix
+        robot_state_.action_transitions.A_jl=Eigen::Matrix<double, 7, 7>::Identity();
+        for (size_t i=0; i<7;i++){
+            robot_state_.action_transitions.A_jl(i,i)=IncreasingBellShapedFunction(0.9*robot_state_.joint_upper_limits(i), robot_state_.joint_upper_limits(i),
+                                                                                 0.0, 1.0, robot_state_.q(i)) +
+                                                    DecreasingBellShapedFunction(robot_state_.joint_lower_limits(i), 0.9*robot_state_.joint_lower_limits(i),
+                                                                                 0.0, 1.0, robot_state_.q(i));
+        }
+        robot_state_.action_transitions.A_jl *= mission_manager_.ActionTransition("J_L", prev_action, curr_action, phase_time);
+        
         // Compute goal vehicle activation matrix
         robot_state_.action_transitions.A_ee=Eigen::Matrix<double, 6, 6>::Identity();
         robot_state_.action_transitions.A_ee *= mission_manager_.ActionTransition("R_M", prev_action, curr_action, phase_time);
+        // Compute teleop activation matrix
+        robot_state_.action_transitions.A_teleop=Eigen::Matrix<double, 6, 6>::Identity();
+        robot_state_.action_transitions.A_teleop *= mission_manager_.ActionTransition("T_M", prev_action, curr_action, phase_time);
     }
-    Eigen::Matrix<double,3,1> getGoalDistance(){
-        Eigen::Matrix<double, 4,4> w_T_g;
-        Eigen::Matrix<double,3,1> goal_distance= Eigen::Matrix<double,3,1>::Zero();
-            if(tf_listener_.frameExists("goal_frame")){
-                tf::StampedTransform tf;
-                Eigen::Affine3d eigen_tf;
-                tf_listener_.lookupTransform("panda_R_link0", "goal_frame", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                w_T_g =  eigen_tf.matrix();
-            
-                Eigen::Matrix<double,3,1> goal_distance;
-                Eigen::Matrix<double,3,1> current_ee_pose;
-                current_ee_pose = robot_state_.trasform_matrices.w_T_e.block<3,1>(0,3);
-                goal_distance = w_T_g.block<3,1>(0,3) - current_ee_pose;
-                return goal_distance;
-            }
-            return goal_distance;
-    };
     
+    public:
+        franka_state(ros::NodeHandle& nh, MissionManager& mission_manager, tf::TransformListener& tf_listener): nh_(nh), mission_manager_(mission_manager), tf_listener_(tf_listener){
+            teleop_cmd_sub_ = nh_.subscribe<std_msgs::Bool>("teleop_cmd_received", 1, &franka_state::teleopCmdCallback, this);
+            return_to_mission_sub_ = nh_.subscribe<std_msgs::Bool>("return_to_mission", 1, &franka_state::returnToMissionCallback, this);
+        };
+        ~franka_state()= default;
+        bool init(hardware_interface::RobotHW* robot_hardware, std::string arm_id){
+            arm_id_ = arm_id;
+            auto* model_interface = robot_hardware->get<franka_hw::FrankaModelInterface>();
+            if (model_interface == nullptr) {
+                ROS_ERROR_STREAM(
+                    "JointVelocityController: Error getting model interface from hardware");
+                return false;
+            }
+            try {
+                model_handle_ = std::make_unique<franka_hw::FrankaModelHandle>(
+                    model_interface->getHandle(arm_id + "_model"));
+            } catch (hardware_interface::HardwareInterfaceException& ex) {
+                ROS_ERROR_STREAM(
+                    "JointVelocityController: Exception getting model handle from interface: "
+                    << ex.what());
+                return false;
+            }
+            auto state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
+            if (state_interface == nullptr) {
+                ROS_ERROR("JointVelocityController: Could not get state interface from hardware");
+                return false;
+            }
+            try {
+                state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
+                    state_interface->getHandle(arm_id + "_robot"));
+            } catch (hardware_interface::HardwareInterfaceException& ex) {
+                ROS_ERROR_STREAM(
+                    "CartesianImpedanceExampleController: Exception getting state handle from interface: "
+                    << ex.what());
+                return false;
+            }
+            return true;
+
+        };
+        void starting(){
+            // compute initial velocity with jacobian and set x_attractor and q_d_nullspace
+            // to initial configuration
+            franka::RobotState initial_state = state_handle_->getRobotState();
+            // get jacobian
+            std::array<double, 42> jacobian_array =
+                model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
+            // convert to eigen
+            Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
+            Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+            Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+            
+            
+        }
+        void update(){
+            updateTransform();
+            computeJacobian();
+            if(GetGoalFrameExists("goal_frame")){
+                computeTaskReference();
+                computeActivationFunction();
+                }
+            if(GetGoalFrameExists(arm_id_+"_teleop_frame")  && GetTeleopCmdReceived()){
+                std::cout << "Teleop control active for: " << arm_id_ <<"_teleop_frame" <<std::endl;
+                computeTaskReference();
+                computeActivationFunction();
+                }
+            updateState();
+            
+        };
+        void updateState(){
+            for (size_t i=0; i<7; i++){
+                robot_state_.q(i) = state_handle_->getRobotState().q[i];
+            }
+        };
+        bool GetGoalFrameExists(const std::string& goal){
+            if (goal == "goal_frame"){
+                return tf_listener_.frameExists("goal_frame_" + arm_id_);
+            }
+            else if (goal == arm_id_ +"_teleop_frame"){
+                return tf_listener_.frameExists(arm_id_ +"_teleop_frame");
+            }
+            else{
+                return false;
+            }
+        };
+        double getNormGoalDistance(std::string goal){
+            if (goal == "goal_frame"){
+                CartErrorResult cart_error = CartError( robot_state_.trasform_matrices.b_T_g,robot_state_.trasform_matrices.b_T_e);
+                Eigen::Matrix<double,6,1> goal_distance;
+                goal_distance.head<3>() = cart_error.pos_error;
+                goal_distance.tail<3>() = cart_error.ori_error;
+                return goal_distance.squaredNorm();
+                
+                }
+            else if (goal == "teleop"){
+                CartErrorResult cart_error = CartError( robot_state_.trasform_matrices.b_T_gteleop,robot_state_.trasform_matrices.b_T_e);
+                Eigen::Matrix<double,6,1> goal_distance;
+                goal_distance.head<3>() = cart_error.pos_error;
+                goal_distance.tail<3>() = cart_error.ori_error;
+                return goal_distance.squaredNorm();
+            }
+            else{
+                Eigen::Matrix<double,6,1> goal_distance;
+                goal_distance << 0.0,0.0,0.0,0.0,0.0,0.0;
+                return goal_distance.squaredNorm();
+            }
+        };
+        Eigen::MatrixXd getJacobian(const std::string task_name){
+            if (task_name == "goal_move"){
+                return robot_state_.jacobians.Jee;
+            }
+            else if (task_name == "joint_limit"){
+                return robot_state_.jacobians.Jjl;
+            }
+            else if (task_name == "teleop"){
+                return robot_state_.jacobians.Jteleop;
+            }
+            else{
+                return Eigen::MatrixXd::Zero(6,7);
+            }
+        };
+        Eigen::MatrixXd getActivationMatrix(const std::string task_name){
+            if (task_name == "goal_move"){
+                return robot_state_.action_transitions.A_ee;
+            }
+            else if (task_name == "joint_limit"){
+                return robot_state_.action_transitions.A_jl;
+            }
+            else if (task_name == "teleop"){
+                return robot_state_.action_transitions.A_teleop;
+            }
+            else{
+                return Eigen::MatrixXd::Zero(6,6);
+            }
+        };
+        Eigen::MatrixXd getTaskReference(const std::string task_name){
+            if (task_name == "goal_move"){
+                return robot_state_.task_references.xdot_g_pos;
+            }
+            else if (task_name == "joint_limit"){
+                return robot_state_.task_references.xdot_jl;
+            }
+            else if (task_name == "teleop"){
+                return robot_state_.task_references.xdot_teleop;
+            }
+            else{
+                return Eigen::MatrixXd::Zero(6,1);
+            }
+        };
+        void SetTaskReferncesToZero(){
+            robot_state_.task_references.xdot_g_pos = Eigen::Matrix<double,6,1>::Zero();
+            robot_state_.task_references.xdot_jl = Eigen::Matrix<double,7,1>::Zero();
+            robot_state_.task_references.xdot_teleop = Eigen::Matrix<double,6,1>::Zero();
+        };
+        bool GetReturnToMission(){
+            return return_to_mission_;
+        };
+        bool GetTeleopCmdReceived(){
+            return teleop_cmd_received_;
+        };
+        void SetReturnToMission(bool val){
+            return_to_mission_ = val;
+        };
+        void SetTeleopCmdReceived(bool val){
+            teleop_cmd_received_ = val;
+        };
+        
 };
 #endif

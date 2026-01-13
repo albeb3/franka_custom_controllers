@@ -18,8 +18,8 @@
 
 using namespace Eigen;
 struct Tasks{
-    std::vector<std::string> vehicle_move{"R_M"};
-    std::vector<std::string> teleop_move{"T_M"};
+    std::vector<std::string> go_to{"R_M", "J_L"};
+    std::vector<std::string> teleop_move{"T_M"," J_L"};
     std::vector<std::string> stop{};
 };
 struct Mission{
@@ -44,19 +44,22 @@ class MissionManager{
     MissionManager() {
     };
     ~MissionManager()= default;
-    void Init(){
-    
+    void Starting(){
         mission_data.phase = 0;
         mission_data.phase_time = 0;
-        mission_data.prev_action = tasks.vehicle_move;
-        mission_data.curr_action = tasks.vehicle_move;
+        mission_data.prev_action = tasks.stop;
+        mission_data.curr_action = tasks.stop;
     }
     void UpdateMissionData(){
-        if (mission_data.phase ==1){
-            mission_data.prev_action = tasks.vehicle_move;
-            mission_data.curr_action = tasks.vehicle_move;
+        if (mission_data.phase ==0){
+            mission_data.prev_action = mission_data.curr_action;
+            mission_data.curr_action = tasks.stop;
         }
-        if (mission_data.phase ==2){
+        if (mission_data.phase ==1){
+            mission_data.prev_action = mission_data.curr_action;
+            mission_data.curr_action = tasks.go_to;
+        }
+        if (mission_data.phase == 2){
             mission_data.prev_action = mission_data.curr_action;
             mission_data.curr_action = tasks.stop;
         }
@@ -66,17 +69,17 @@ class MissionManager{
         }
     }
     double ActionTransition(const std::string case_name, std::vector<std::string> prev_action, std::vector<std::string> curr_action, double time){
-        std::cout << "Prev action: ";
+        //std::cout << "Prev action: ";
         for (const auto& action : prev_action){
-            std::cout << action << " ";
+            //std::cout << action << " ";
         }
-        std::cout << std::endl;
-        std::cout << "Curr action: ";
+        //std::cout << std::endl;
+        //std::cout << "Curr action: ";
         for (const auto& action : curr_action){
-            std::cout << action << " ";
+            //std::cout << action << " ";
         }
-        std::cout << std::endl;
-        std::cout << "Case name: " << case_name << std::endl;
+        //std::cout << std::endl;
+        //std::cout << "Case name: " << case_name << std::endl;
         if (ContainTask(prev_action, case_name) && ContainTask(curr_action, case_name)){
             return 1.0;
         }else if (ContainTask(curr_action, case_name) && !ContainTask(prev_action, case_name)){
@@ -104,6 +107,7 @@ class MissionManager{
         return mission_data.previous_phase;
     }
     void SetPhase(int previous_phase,int phase){
+        ROS_WARN("Setting phase from %d to %d", mission_data.phase, phase);
         mission_data.phase = phase;
         mission_data.previous_phase = previous_phase;
         mission_data.phase_time = 0;
