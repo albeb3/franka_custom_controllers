@@ -85,7 +85,7 @@ target_include_directories(franka_custom_controllers PUBLIC
 
 
 add_executable(tf_broadcaster_node src/tf_broadcaster_node.cpp)
-add_executable(tf_EE_node src/tf_EE_node.cpp)
+
 add_executable(tf_EE_velocity_node src/tf_EE_velocity_node.cpp)
 add_executable(tf_EE_velocity_node_Left src/tf_EE_velocity_node_Left.cpp)
 add_executable(tf_EE_velocity_node_Right src/tf_EE_velocity_node_Right.cpp)
@@ -96,9 +96,7 @@ add_executable(gripper_node src/gripper_node.cpp)
 target_link_libraries(tf_broadcaster_node
   ${catkin_LIBRARIES}
 )
-target_link_libraries(tf_EE_node
-  ${catkin_LIBRARIES}
-)
+
 
 target_link_libraries(tf_EE_velocity_node
   ${catkin_LIBRARIES}
@@ -136,7 +134,7 @@ install(FILES franka_custom_controllers_plugin.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 catkin_install_python(
-  PROGRAMS scripts/interactive_joystick.py  scripts/Plot.py
+  PROGRAMS scripts/interactive_joystick.py  scripts/Plot.py scripts/Franka_PointCloud.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
