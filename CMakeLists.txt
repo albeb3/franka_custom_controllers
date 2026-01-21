@@ -24,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
   urdf
   visualization_msgs
   task_priority
+  robot_perception
 )
 
 find_package(Eigen3 REQUIRED)
@@ -93,9 +94,11 @@ add_executable(tf_links_wrt_world_node src/tf_links_wrt_world.cpp)
 add_executable(gripper_node src/gripper_node.cpp)
 
 
+
 target_link_libraries(tf_broadcaster_node
   ${catkin_LIBRARIES}
 )
+
 
 
 target_link_libraries(tf_EE_velocity_node

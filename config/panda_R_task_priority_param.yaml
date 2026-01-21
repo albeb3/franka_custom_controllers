@@ -1,0 +1,11 @@
+th_min_self_avoidance: 0.02
+th_max_self_avoidance: 0.03
+th_min_obstacle_avoidance: 0.01
+th_max_obstacle_avoidance: 0.025
+th_min_other_avoidance: 0.05
+th_max_other_avoidance: 0.1
+gain_teleop: 1.5
+gain_obstacle_avoidance: 1.5
+gain_self_avoidance: 1.5
+gain_other_avoidance: 0.8
+saturation_velocity: 0.8
