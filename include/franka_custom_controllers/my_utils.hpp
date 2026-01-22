@@ -25,7 +25,7 @@ struct CartErrorResult{
     Eigen::Matrix<double,3,1> ori_error;
 };
 
-double DecreasingBellShapedFunction(double xmin, double xmax, double ymin, double ymax, double x){
+double decreasingBellShapedFunction(double xmin, double xmax, double ymin, double ymax, double x){
     if(x <= xmin){
         return ymax;
     }else if(x >= xmax){
@@ -35,7 +35,7 @@ double DecreasingBellShapedFunction(double xmin, double xmax, double ymin, doubl
         return (ymax - ymin) * 0.5 * (1 + cos(cosarg)) + ymin;
     }
 }
-double IncreasingBellShapedFunction(double xmin, double xmax, double ymin, double ymax, double x){
+double increasingBellShapedFunction(double xmin, double xmax, double ymin, double ymax, double x){
         if(x <= xmin){
             return ymin;
         }else if(x >= xmax){
@@ -58,7 +58,7 @@ SVDResult computeSVD( const Eigen::MatrixXd& A ){
     return result;
 }
 
-RegularizedPseudoInverseResult RegPseudoInverse(const Eigen::MatrixXd& X,
+RegularizedPseudoInverseResult regPseudoInverse(const Eigen::MatrixXd& X,
                                             double lambda, 
                                             double threshold){
     RegularizedPseudoInverseResult result;
@@ -70,7 +70,7 @@ RegularizedPseudoInverseResult RegPseudoInverse(const Eigen::MatrixXd& X,
     result.Jpinv = Eigen::MatrixXd::Zero(X.cols(), X.rows());
     Eigen::MatrixXd S_inv = Eigen::MatrixXd::Zero(widthS, lengthS);
     for (int i = 0; i < std::min(lengthS, widthS); ++i) {
-        result.p(i)=DecreasingBellShapedFunction(0.0, threshold, 0.0, lambda, svd_result.S(i,i));
+        result.p(i)=decreasingBellShapedFunction(0.0, threshold, 0.0, lambda, svd_result.S(i,i));
         S_inv(i,i) = svd_result.S(i,i) / (svd_result.S(i,i) * svd_result.S(i,i) +  result.p(i));
     }
     result.Jpinv = svd_result.V * S_inv * svd_result.U.transpose();
@@ -102,7 +102,7 @@ RegularizedPseudoInverseResult iCAT_pseudoInverse(const Eigen::MatrixXd& J,
     ans.p = Eigen::VectorXd::Zero(std::min(n,m));
     result.Jpinv = Eigen::MatrixXd::Zero(n,m);
     result.p = Eigen::VectorXd::Zero(std::min(n,m));
-    ans = RegPseudoInverse(J.transpose()*A.transpose()*A*J + Rtor + Rctrl, lambda, threshold);
+    ans = regPseudoInverse(J.transpose()*A.transpose()*A*J + Rtor + Rctrl, lambda, threshold);
     result.Jpinv = ans.Jpinv * J.transpose() * A.transpose() * A;
     result.p = ans.p;
     return result;
@@ -142,7 +142,7 @@ iCAT_task_result iCAT_Task( const Eigen::MatrixXd& A,
     result.W = W;
     return result;
 }
-Eigen::Vector3d VersorLemma(const Eigen::Matrix3d& R1, const Eigen::Matrix3d& R2) {
+Eigen::Vector3d versorLemma(const Eigen::Matrix3d& R1, const Eigen::Matrix3d& R2) {
     Eigen::Vector3d i1,i2;
     Eigen::Vector3d j1,j2;
     Eigen::Vector3d k1,k2;
@@ -204,17 +204,17 @@ Eigen::Vector3d VersorLemma(const Eigen::Matrix3d& R1, const Eigen::Matrix3d& R2
     }
 
 }
-CartErrorResult CartError(const Eigen::Matrix4d& T1, const Eigen::Matrix4d& T2){
+CartErrorResult cartError(const Eigen::Matrix4d& T1, const Eigen::Matrix4d& T2){
     CartErrorResult result;
     // position error
     result.pos_error = T1.block<3,1>(0,3)  - T2.block<3,1>(0,3);
     // orientation error
     Eigen::Matrix3d R1 = T1.block<3,3>(0,0);
     Eigen::Matrix3d R2 = T2.block<3,3>(0,0);
-    result.ori_error = VersorLemma(R1, R2)*(-1.0);
+    result.ori_error = versorLemma(R1, R2)*(-1.0);
     return result;
 }
-Eigen::MatrixXd Saturate(const Eigen::MatrixXd& x, double xmax){
+Eigen::MatrixXd saturate(const Eigen::MatrixXd& x, double xmax){
     int n = x.size();
     double max=0;
     Eigen::MatrixXd out;
@@ -233,5 +233,22 @@ Eigen::MatrixXd Saturate(const Eigen::MatrixXd& x, double xmax){
         
     }
 }
+Eigen::Matrix3d skewSymmetricMatrix( Eigen::Vector3d v ){
+    Eigen::Matrix3d S;
+    S <<     0, -v(2),  v(1),
+          v(2),     0, -v(0),
+         -v(1),  v(0),     0;
+    return S;
+} 
+Eigen::MatrixXd computeRigidBodyJacobian( Eigen::Vector3d point  ){
+    Eigen::MatrixXd J(6,6);
+    J.block<3,3>(0,0) = Eigen::Matrix3d::Identity();
+    
+    J.block<3,3>(0,3) = -skewSymmetricMatrix(point);
+    J.block<3,3>(3,0) = Eigen::Matrix3d::Zero();
+    J.block<3,3>(3,3) = Eigen::Matrix3d::Identity();
+    return J;
+}                 
+
 #endif // MY_UTILS_HPP
 
