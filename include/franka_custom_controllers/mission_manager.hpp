@@ -107,7 +107,7 @@ class MissionManager{
         return mission_data.previous_phase;
     }
     void setPhase(int previous_phase,int phase){
-        ROS_WARN("Setting phase from %d to %d", mission_data.phase, phase);
+        //ROS_WARN("Setting phase from %d to %d", mission_data.phase, phase);
         mission_data.phase = phase;
         mission_data.previous_phase = previous_phase;
         mission_data.phase_time = 0;

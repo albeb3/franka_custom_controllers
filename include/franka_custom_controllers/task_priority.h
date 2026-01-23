@@ -32,20 +32,26 @@ class task_priority{
         icat_result_.ydotbar = Eigen::MatrixXd::Zero(7,1);
         icat_result_.Q = Eigen::MatrixXd::Identity(7,7);
        
-         
-        icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_2_CUBE),
-                                    robot_state_->getJacobian(Task_name::JOINT_2_CUBE),
+        icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_4_CUBE),
+                                    robot_state_->getJacobian(Task_name::JOINT_4_CUBE),
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
-                                    robot_state_->getTaskReference(Task_name::JOINT_2_CUBE),
-                                    0.001, 0.01, 10);
+                                    robot_state_->getTaskReference(Task_name::JOINT_4_CUBE),
+                                    0.001, 0.01, 10); 
         icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_3_CUBE),
                                     robot_state_->getJacobian(Task_name::JOINT_3_CUBE),
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
                                     robot_state_->getTaskReference(Task_name::JOINT_3_CUBE),
                                     0.001, 0.01, 10);
-        icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::HAND_OTHM),
+        icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_2_CUBE),
+                                    robot_state_->getJacobian(Task_name::JOINT_2_CUBE),
+                                    icat_result_.Q,
+                                    icat_result_.ydotbar,
+                                    robot_state_->getTaskReference(Task_name::JOINT_2_CUBE),
+                                    0.001, 0.01, 10);
+                                    
+        /*icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::HAND_OTHM),
                                     robot_state_->getJacobian(Task_name::HAND_OTHM),
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
@@ -62,7 +68,7 @@ class task_priority{
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
                                     robot_state_->getTaskReference(Task_name::FINGERRIGHT_OTHM),
-                                    0.001, 0.01, 10);
+                                    0.001, 0.01, 10);*/
         icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_7_OTHM),
                                     robot_state_->getJacobian(Task_name::JOINT_7_OTHM),
                                     icat_result_.Q,
@@ -267,7 +273,7 @@ class task_priority{
         sendCommands();
         updateMissionPhase();
 
-    };
+    }
     
   
   

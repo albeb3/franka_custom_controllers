@@ -184,10 +184,10 @@ class franka_state{
         float gain_other_avoidance_;
         float saturation_velocity_;
         // time handling
-        std::array<double, N_LINKS> d_prev_;
-        std::array<int, N_LINKS> inc_counter_;
-        std::array<bool, N_LINKS> moving_away_;
-        std::array<double, N_LINKS> distance_of_stop_;
+        std::array<std::array<double, 2>, N_LINKS> d_prev_;
+        std::array<std::array<int, 2>, N_LINKS> inc_counter_;
+        std::array<std::array<bool, 2>, N_LINKS> moving_away_;
+        std::array<std::array<float, 2>, N_LINKS> distance_of_stop_;
 
 
         // teleop callbacks
@@ -277,6 +277,9 @@ class franka_state{
                         other_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
                     }
                 }
+                std::cout << "Idx: " << task.link_id << std::endl;
+                std::cout << "Other min distance link "<< idx+1 << ": " << other_min_distances_[idx] << std::endl;  
+
             }
             /*
              for (const auto& task : msg->proximity_tasks) {
@@ -516,17 +519,51 @@ class franka_state{
                 }
             }
             
+
+            robot_state_.task_references.xdot_cube[INDEX::JOINT_2].setZero();
+            if (cube_min_distances_[INDEX::JOINT_2]<th_max_obstacle_avoidance_[INDEX::JOINT_2]){
+                std::cout << "Cube min distance link 2: "<< cube_min_distances_[INDEX::JOINT_2] << std::endl;
+                Eigen::Vector3d xdot;
+                //xdot = -cube_direct_points_[INDEX::JOINT_2] / (cube_min_distances_[INDEX::JOINT_2] + 0.3);
+                xdot = -cube_direct_points_[INDEX::JOINT_2] * gain_obstacle_avoidance_;
+                //robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = 0.9 * xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_2].head(3) = xdot;
+            }
+            robot_state_.task_references.xdot_cube[INDEX::JOINT_3].setZero();
+            if (cube_min_distances_[INDEX::JOINT_3]<th_max_obstacle_avoidance_[INDEX::JOINT_3]){
+                std::cout << "Cube min distance link 3: "<< cube_min_distances_[INDEX::JOINT_3] << std::endl;
+                Eigen::Vector3d xdot;
+                //xdot = -cube_direct_points_[INDEX::JOINT_3] / (cube_min_distances_[INDEX::JOINT_3] + 0.3);
+                xdot = -cube_direct_points_[INDEX::JOINT_3] * gain_obstacle_avoidance_;
+                //robot_state_.task_references.xdot_cube[INDEX::JOINT_5].head(3) = 0.9 * xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_3].head(3) = xdot;
+            }
+            robot_state_.task_references.xdot_cube[INDEX::JOINT_4].setZero();
+            if (cube_min_distances_[INDEX::JOINT_4]<th_max_obstacle_avoidance_[INDEX::JOINT_4]){
+                std::cout << "Cube min distance link 4: "<< cube_min_distances_[INDEX::JOINT_4] << std::endl;
+                Eigen::Vector3d xdot;
+                //xdot = -cube_direct_points_[INDEX::JOINT_4] / (cube_min_distances_[INDEX::JOINT_4] + 0.3);
+                xdot = -cube_direct_points_[INDEX::JOINT_4] * gain_obstacle_avoidance_;
+                //robot_state_.task_references.xdot_cube[INDEX::JOINT_6].head(3) = 0.9 * xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = xdot;
+            }
+            
+            
             // compute self and other manipulator proximity task references
             for (size_t i=0; i<N_JOINTS; i++){
+                /*
                 // obstacle proximity task references
                 robot_state_.task_references.xdot_cube[i].setZero();
                 if (cube_min_distances_[i]<th_max_obstacle_avoidance_[i]){
+                    std::cout << "Cube min distance link "<< i+1 << ": "<< cube_min_distances_[i] << std::endl;
                     Eigen::Vector3d xdot;
                     //xdot = -cube_direct_points_[i] / (cube_min_distances_[i] + 0.3);
                     xdot = -cube_direct_points_[i] * gain_obstacle_avoidance_;
                     //robot_state_.task_references.xdot_cube[i].head(3) = 0.9 * xdot;
                     robot_state_.task_references.xdot_cube[i].head(3) = xdot;
                 }
+                */
+                
                 
                 // self proximity task references
                 robot_state_.task_references.xdot_self[i].setZero();
@@ -592,29 +629,79 @@ class franka_state{
                 for (size_t j=0; j<3; j++){
                     robot_state_.action_transitions.A_cube[i](j,j)= decreasingBellShapedFunction(th_min_obstacle_avoidance_[i], th_max_obstacle_avoidance_[i], 0.0, 1.0, cube_min_distances_[i]);
                 }
+                
+                /*
+                for (size_t j=0; j<3; j++){
+                  std::cout << "Obstacle avoidance activation link "<< 2 << ": "<< robot_state_.action_transitions.A_cube[1](j,j) << std::endl;    
+                }
+                std::cout << "task references xdot cube link "<< 2 << ": "<< robot_state_.task_references.xdot_cube[1].head(3).transpose() << std::endl;
+                std::cout << "Cube min distance link "<< 2 << ": "<< cube_min_distances_[1] << std::endl;
+                std::cout << "----------------------------------------" << std::endl;
+                for (size_t j=0; j<3; j++){
+                  std::cout << "Obstacle avoidance activation link "<< 3 << ": "<< robot_state_.action_transitions.A_cube[2](j,j) << std::endl;
+                }
+                std::cout << "task references xdot cube link "<< 3 << ": "<< robot_state_.task_references.xdot_cube[2].head(3).transpose() << std::endl;
+                std::cout << "Cube min distance link "<< 3 << ": "<< cube_min_distances_[2] << std::endl;
+                std::cout << "----------------------------------------" << std::endl;
+                for (size_t j=0; j<3; j++){
+                  std::cout << "Obstacle avoidance activation link "<< 4 << ": "<< robot_state_.action_transitions.A_cube[3](j,j) << std::endl;
+                }
+                std::cout << "task references xdot cube link "<< 4 << ": "<< robot_state_.task_references.xdot_cube[3].head(3).transpose() << std::endl;
+                std::cout << "Cube min distance link "<< 4 << ": "<< cube_min_distances_[3] << std::endl;
+                std::cout << "----------------------------------------" << std::endl;
+                */
+                
+                // SELF AVOIDANCE
                 robot_state_.action_transitions.A_self[i]=Eigen::Matrix<double, 6, 6>::Zero();
                 robot_state_.action_transitions.A_othM[i]=Eigen::Matrix<double, 6, 6>::Zero();
                 for (size_t j=0; j<3; j++){
                     robot_state_.action_transitions.A_self[i](j,j)= decreasingBellShapedFunction(th_min_self_avoidance_[i], th_max_self_avoidance_[i], 0.0, 1.0, self_min_distances_[i]);
                     robot_state_.action_transitions.A_othM[i](j,j)= decreasingBellShapedFunction(th_min_other_avoidance_[i], th_max_other_avoidance_[i], 0.0, 1.0, other_min_distances_[i]);
                 }
-                //DA PROVARE--------------------------------------------
-                Eigen::Vector3d direction = other_direct_points_[i];
-                if (direction.norm() > 1e-6){
-                    direction.normalize();
-                
+                std::cout << "----------------------------------------" << std::endl;
+                std::cout << "Task reference xdot hand othm: " << robot_state_.task_references.xdot_othM[INDEX::HAND].head(3).transpose() << std::endl;
+                for (size_t j=0; j<3; j++){
+                  std::cout << "Other manipulator avoidance activation hand "<< ": "<< robot_state_.action_transitions.A_othM[INDEX::HAND](j,j) << std::endl;    
                 }
-                Eigen::Vector3d xdot = robot_state_.task_references.xdot_teleop.head<3>();
-                double approaching = xdot.dot(direction);
-                if (approaching < 0 && moving_away_[i]){
+                std::cout << "Other min distance hand: " << other_min_distances_[INDEX::HAND] << std::endl;
+                
+                
+                
+                
+                
+                //DA PROVARE-------------------------------------------
+                Eigen::Vector3d other_direction = other_direct_points_[i];
+                if (other_direction.norm() > 1e-6){
+                    other_direction.normalize();
+                }
+                //Eigen::Vector3d other_xdot_teleop = robot_state_.task_references.xdot_teleop.head<3>();
+                Eigen::Vector3d other_xdot = robot_state_.task_references.xdot_othM[i].head<3>();
+                double other_approaching = other_xdot.dot(other_direction);
+                if (other_approaching < 0 && moving_away_[i][0]){
                 
                     for (size_t j=0; j<3; j++){
-                        robot_state_.action_transitions.A_othM[i](j,j)= decreasingBellShapedFunction(distance_of_stop_[i], distance_of_stop_[i]+0.001, 0.0, 1.0, other_min_distances_[i]);
+                        robot_state_.action_transitions.A_othM[i](j,j)= decreasingBellShapedFunction(distance_of_stop_[i][0], distance_of_stop_[i][0]+0.001, 0.0, 1.0, other_min_distances_[i]);
                     }
                 }
+                Eigen::Vector3d cube_direction = cube_direct_points_[i];
+                if (cube_direction.norm() > 1e-6){
+                    cube_direction.normalize();
+                }
+                //Eigen::Vector3d cube_xdot_teleop = robot_state_.task_references.xdot_teleop.head<3>();
+                Eigen::Vector3d cube_xdot = robot_state_.task_references.xdot_cube[i].head<3>();
+                double cube_approaching = cube_xdot.dot(cube_direction);
+                if (cube_approaching < 0 && moving_away_[i][1]){
+                    std::cout << "Link " << i+1 << " moving away from cube, distance of stop: " << distance_of_stop_[i][1] << std::endl;
+                    for (size_t j=0; j<3; j++){
+                        robot_state_.action_transitions.A_cube[i](j,j)= decreasingBellShapedFunction(distance_of_stop_[i][1], distance_of_stop_[i][1]+0.001, 0.0, 1.0, cube_min_distances_[i]);
+                    }
+                }
+                
                 //----------------------------------------------------
                 
             }
+            
+
             
             mission_manager_.updateMissionData();
             std::vector<std::string> prev_action = mission_manager_.getPrevAction();
@@ -659,78 +746,68 @@ class franka_state{
             }
         };
         void setTimeHandlingVariablesToZero(){
-            for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
-                d_prev_[i] = std::numeric_limits<double>::max();
-                distance_of_stop_[i] = std::numeric_limits<double>::max();
-                inc_counter_[i] = 0;
-                moving_away_[i] = false;
+            for (size_t j=0 ; j<2; j++){
+                for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
+                    d_prev_[i][j] = std::numeric_limits<double>::max();
+                    distance_of_stop_[i][j] = std::numeric_limits<double>::max();
+                    inc_counter_[i][j] = 0;
+                    moving_away_[i][j] = false;
+                }
             }
         };
+      
         void updateTimeHandlingVariables() {
 
             constexpr double eps = 1e-5;
             constexpr int N_confirm = 3;
-
-            for (size_t i = 0; i < N_JOINTS; i++) {
-
-                double d = other_min_distances_[i];
-
-                if (d < th_max_other_avoidance_[i]) {
-
-                    if (d < d_prev_[i] - eps) {
-                        // approaching
-                        d_prev_[i] = d;
-                        inc_counter_[i] = 0;
-                        moving_away_[i] = false;
-                    }
-                    else if (d > d_prev_[i] + eps) {
-                        // moving away
-                        if (!moving_away_[i]) {
-                            inc_counter_[i]++;
-                            if (inc_counter_[i] >= N_confirm) {
-                                moving_away_[i] = true;
-                                distance_of_stop_[i] = d;
-                            }
-                        }
-                        d_prev_[i] = d;
-                    }
-                }
-                else {
-                    // reset variables if outside the threshold
-                    d_prev_[i] = std::numeric_limits<double>::max();
-                    distance_of_stop_[i] = std::numeric_limits<double>::max();
-                    inc_counter_[i] = 0;
-                    moving_away_[i] = false;
-                }
-            }
-        }
-
-        /*
-        void updateTimeHandlingVariables(){
+            double d;
+            double th_max;
+            for (size_t j=0 ; j<2; j++){
             
-            for (size_t i=0; i<Joint_frames_.size()-1; i++){    // for each joint less EE
-                if (other_min_distances_[i]<th_max_other_avoidance_){
-                    if (self_min_distances_[i] < d_prev_[i]){
-                        // distance is decreasing
-                        d_prev_[i] = self_min_distances_[i];
-                        inc_counter_[i] = 0;
-                        moving_away_[i] = false;
+                for (size_t i = 0; i < N_JOINTS; i++) {
+                    if (j==0) {
+                        d = other_min_distances_[i];
+                        th_max = th_max_other_avoidance_[i];
                     }
-                    else{
-                        // distance is increasing
-                        if (!moving_away_[i]){
-                            inc_counter_[i] += 1;
-                            if (inc_counter_[i] >= 3){ // if distance has been increasing for 3 consecutive cycles
-                                moving_away_[i] = true;
-                            }
+                    else {
+                        d = cube_min_distances_[i];
+                        th_max = th_max_obstacle_avoidance_[i];
+                    }
+
+                    if (d < th_max) {
+
+                        if (d < d_prev_[i][j] - eps) {
+                            // approaching
+                            d_prev_[i][j] = d;
+                            inc_counter_[i][j] = 0;
+                            moving_away_[i][j] = false;
                         }
-                        d_prev_[i] = self_min_distances_[i];
+                        else if (d > d_prev_[i][j] + eps) {
+                            // moving away
+                            if (!moving_away_[i][j]) {
+                                inc_counter_[i][j]++;
+                                if (inc_counter_[i][j] >= N_confirm) {
+                                    moving_away_[i][j] = true;
+                                    distance_of_stop_[i][j] = d;
+                                    std::cout << "updateTimeHandlingVariables::Link " << i+1 << " moving away, distance of stop: " << distance_of_stop_[i][j] << std::endl;
+
+                                }
+                            }
+                            d_prev_[i][j] = d;
+                        }
+                    }
+                    else {
+                        // reset variables if outside the threshold
+                        d_prev_[i][j] = std::numeric_limits<double>::max();
+                        distance_of_stop_[i][j] = std::numeric_limits<double>::max();
+                        inc_counter_[i][j] = 0;
+                        moving_away_[i][j] = false;
+                        //std::cout << "updateTimeHandlingVariables::Link " << i+1 << " outside threshold, variables reset." << std::endl;
                     }
                 }
             }
         }
-    
-        */
+
         
         public:
         franka_state(ros::NodeHandle& nh, MissionManager& mission_manager, tf::TransformListener& tf_listener): nh_(nh), mission_manager_(mission_manager), tf_listener_(tf_listener){
