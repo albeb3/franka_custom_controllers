@@ -126,17 +126,7 @@ class task_priority{
         //std::cout << "ydotbar of "<< arm_id_<< " :" << icat_result_.ydotbar.transpose() << std::endl;
 
     }
-    void sendCommands(){
-        // compute control
-        // allocate joint velocities
-        Eigen::VectorXd q_dot(7);
-        // compute joint velocities
-        q_dot = getYdotbarResult();
-        // set joint velocities
-        for (size_t i = 0; i < velocity_joint_handles_.size(); ++i) {
-            velocity_joint_handles_[i].setCommand(q_dot(i));
-        }
-    }    
+   
     void updateMissionPhase(){
         mission_manager_->setPhaseTime(0.02);
         switch (mission_manager_->getPhase())
@@ -177,7 +167,7 @@ class task_priority{
                 robot_state_->setTaskReferencesToZero();
                 double distance_to_goal = robot_state_->getNormGoalDistance("goal_frame");
                 //std::cout << "Distance to goal in stop phase: " << distance_to_goal << std::endl;
-                if (distance_to_goal >= 0.001 && robot_state_->getReturnToMission()){
+                if (distance_to_goal >= 0.0001 && robot_state_->getReturnToMission()){
                     mission_manager_->setPhase(mission_manager_->getPhase(),1);
                 }
                 else if (robot_state_->getTeleopCmdReceived()){
@@ -202,7 +192,7 @@ class task_priority{
                 robot_state_->setTeleopCmdReceived(false);
                 
                 }
-            else if (distance_to_teleop_goal < 0.001 ){
+            else if (distance_to_teleop_goal < 0.0001 ){
                 mission_manager_->setPhase(mission_manager_->getPhase(),2);
                 robot_state_->setTeleopCmdReceived(false);
                 
@@ -211,12 +201,20 @@ class task_priority{
             }
         }
     }
-
-
     Eigen::VectorXd getYdotbarResult(){
         return icat_result_.ydotbar;
     }
-    
+     void sendCommands(){
+        // compute control
+        // allocate joint velocities
+        Eigen::VectorXd q_dot(7);
+        // compute joint velocities
+        q_dot = getYdotbarResult();
+        // set joint velocities
+        for (size_t i = 0; i < velocity_joint_handles_.size(); ++i) {
+            velocity_joint_handles_[i].setCommand(q_dot(i));
+        }
+    }    
     public:
     task_priority(ros::NodeHandle& nh): node_handle_(nh){};
     ~task_priority()= default;
@@ -257,7 +255,7 @@ class task_priority{
 
         mission_manager_ = std::make_unique<MissionManager>();
         tf_listener_ = std::make_shared<tf::TransformListener>();
-        robot_state_ = std::make_unique<franka_state>(node_handle_, *mission_manager_, *tf_listener_);
+        robot_state_ = std::make_unique<franka_state>(node_handle_, *mission_manager_);
         
         return robot_state_->init(robot_hardware/*, arm_id */);
     };

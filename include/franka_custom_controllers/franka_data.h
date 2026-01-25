@@ -138,7 +138,6 @@ class franka_state{
         // Node handle
         ros::NodeHandle& nh_;
         // TF listener
-        tf::TransformListener& tf_listener_;
         tf2_ros::Buffer tf2_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
         // Franka handles
@@ -439,80 +438,47 @@ class franka_state{
             robot_state_.trasform_matrices.b_T_e = transform.matrix();
  
             const std::string base_link = arm_id_ + "_link0";
-            geometry_msgs::TransformStamped tf2;
+
+            geometry_msgs::TransformStamped tf_msg;
             Eigen::Affine3d eigen_tf;
-            // update link transforms
+        
             for (size_t i =0; i<N_LINKS;i++){
                 std::string child = arm_id_ + link_names_[i];
                 try{
-                    tf2= tf2_buffer_.lookupTransform(base_link, child, ros::Time(0));
-                    //tf::transformTFToEigen(tf, eigen_tf);
-                    //robot_state_.trasform_matrices.b_T_i[i] = eigen_tf.matrix();
-                    robot_state_.trasform_matrices.b_T_i[i] = tf2::transformToEigen(tf2).matrix();
+                    tf_msg = tf2_buffer_.lookupTransform(base_link, child, ros::Time(0));
+                    robot_state_.trasform_matrices.b_T_i[i] = tf2::transformToEigen(tf_msg).matrix();
                 }
                 catch (tf::TransformException &ex) {
                     ROS_WARN("%s",ex.what());
                     continue;
                 }
             }
-            /*
-            
-            Eigen::Affine3d eigen_tf;
-            for (size_t i =0; i<N_LINKS;i++){
-                std::string child = arm_id_ + link_names_[i];
-                try{
-                    tf_listener_.lookupTransform(base_link, child, ros::Time(0), tf);
-                    tf::transformTFToEigen(tf, eigen_tf);
-                    robot_state_.trasform_matrices.b_T_i[i] = eigen_tf.matrix();
+           
+            std::vector<std::pair<std::string, Eigen::Matrix4d*>> goal_frames = {
+                {"goal_frame_" + arm_id_, &robot_state_.trasform_matrices.b_T_g},
+                {arm_id_+"_teleop_frame", &robot_state_.trasform_matrices.b_T_gteleop}
+            };
+            for (const auto& frame_pair : goal_frames) {
+                const std::string& frame_name = frame_pair.first;
+                Eigen::Matrix4d* transform_matrix = frame_pair.second;
+                std::string frame_exist;
+                if (frame_name == "goal_frame_" + arm_id_) {
+                    frame_exist = "goal_frame" ;
                 }
-                catch (tf::TransformException &ex) {
-                    ROS_WARN("%s",ex.what());
-                    continue;
+                else {
+                    frame_exist = arm_id_ + "_teleop_frame";
                 }
-            }
-            */
-                   
-            // update goal transform if exists3
-            if(getGoalFrameExists("goal_frame")){
-                //tf2_buffer_.canTransform(base_link, "goal_frame_"+arm_id_, ros::Time(0), ros::Duration(2.0));
-                geometry_msgs::TransformStamped tf_msg;
-                try{
-                    tf_msg = tf2_buffer_.lookupTransform(base_link,"goal_frame_"+ arm_id_, ros::Time(0));
-                    //tf::transformTFToEigen(tf, eigen_tf);
-                    //robot_state_.trasform_matrices.b_T_g =  eigen_tf.matrix();
-                    robot_state_.trasform_matrices.b_T_g =  tf2::transformToEigen(tf_msg).matrix();
-                }
-                catch (tf2::TransformException &ex) {
-                    ROS_WARN("%s",ex.what());
-                    return;
+                if (getGoalFrameExists(frame_exist)) {
+                    try {
+                        tf_msg = tf2_buffer_.lookupTransform(base_link, frame_name, ros::Time(0));
+                        *transform_matrix = tf2::transformToEigen(tf_msg).matrix();
+                    } catch (tf2::TransformException &ex) {
+                        ROS_WARN("%s", ex.what());
+                        return;
+                    }
                 }
             }
-            /*
-            if(getGoalFrameExists("goal_frame")){
-                try{
-                    tf_listener_.lookupTransform(base_link, "goal_frame_" + arm_id_, ros::Time(0), tf);
-                    tf::transformTFToEigen(tf, eigen_tf);
-                    robot_state_.trasform_matrices.b_T_g =  eigen_tf.matrix();
-                }
-                catch (tf::TransformException &ex) {
-                    ROS_WARN("%s",ex.what());
-                    return;
-                }
-            }*/
-            tf::StampedTransform tf;
-            // update teleop goal transform if exists
-            if(getGoalFrameExists(arm_id_+"_teleop_frame")){
-                try{
-                    tf_listener_.lookupTransform(base_link, arm_id_+"_teleop_frame", ros::Time(0), tf);
-                    tf::transformTFToEigen(tf, eigen_tf);
-                    robot_state_.trasform_matrices.b_T_gteleop =  eigen_tf.matrix();
-                }
-                catch (tf::TransformException &ex) {
-                    ROS_WARN("%s",ex.what());
-                    return;
-                }
-            }
-       
+           
             
         };
         void updatePointsOfInterest(){
@@ -828,7 +794,7 @@ class franka_state{
 
         
         public:
-        franka_state(ros::NodeHandle& nh, MissionManager& mission_manager, tf::TransformListener& tf_listener): nh_(nh), mission_manager_(mission_manager), tf_listener_(tf_listener){
+        franka_state(ros::NodeHandle& nh, MissionManager& mission_manager): nh_(nh), mission_manager_(mission_manager){
             teleop_cmd_sub_ = nh_.subscribe<std_msgs::Bool>("teleop_cmd_received", 1, &franka_state::teleopCmdCallback, this);
             return_to_mission_sub_ = nh_.subscribe<std_msgs::Bool>("return_to_mission", 1, &franka_state::returnToMissionCallback, this);
             self_proximity_task_sub_ = nh_.subscribe<robot_perception::ProximityTaskArray>("proximity_tasks", 1, &franka_state::selfProximityTaskCallback, this);
@@ -1025,10 +991,10 @@ class franka_state{
         
         bool getGoalFrameExists(const std::string& goal){
             if (goal == "goal_frame"){
-                return tf_listener_.frameExists("goal_frame_" + arm_id_);
+                return tf2_buffer_.canTransform(arm_id_ + "_link0", "goal_frame_" + arm_id_, ros::Time(0));
             }
             else if (goal == arm_id_ +"_teleop_frame"){
-                return tf_listener_.frameExists(arm_id_ +"_teleop_frame");
+                return tf2_buffer_.canTransform(arm_id_ + "_link0", arm_id_ +"_teleop_frame", ros::Time(0));
             }
             else{
                 return false;
