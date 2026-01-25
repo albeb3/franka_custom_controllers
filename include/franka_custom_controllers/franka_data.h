@@ -5,6 +5,9 @@
 #include <array>
 #include <string>
 #include <tf/transform_listener.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_ros/buffer.h>
 
 #include <geometry_msgs/Twist.h>
 #include <ros/ros.h>
@@ -136,6 +139,8 @@ class franka_state{
         ros::NodeHandle& nh_;
         // TF listener
         tf::TransformListener& tf_listener_;
+        //tf2_ros::Buffer& tf2_buffer_;
+        //tf2_ros::TransformListener& tf2_listener_;
         // Franka handles
         std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
         std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
@@ -432,14 +437,14 @@ class franka_state{
             franka::RobotState robot_state = state_handle_->getRobotState();
             Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
             robot_state_.trasform_matrices.b_T_e = transform.matrix();
-            
-            // update link transforms from panda_link2 to panda_link7
-            const std::string arm_id_link = arm_id_ + "_link";
+ 
+            const std::string base_link = arm_id_ + "_link0";
             tf::StampedTransform tf;
             Eigen::Affine3d eigen_tf;
-            for (size_t i=0; i<N_JOINTS; i++){
+            for (size_t i =0; i<N_LINKS;i++){
+                std::string child = arm_id_ + link_names_[i];
                 try{
-                    tf_listener_.lookupTransform(arm_id_link + "0", arm_id_link + std::to_string(i+1), ros::Time(0), tf);
+                    tf_listener_.lookupTransform(base_link, child, ros::Time(0), tf);
                     tf::transformTFToEigen(tf, eigen_tf);
                     robot_state_.trasform_matrices.b_T_i[i] = eigen_tf.matrix();
                 }
@@ -447,35 +452,14 @@ class franka_state{
                     ROS_WARN("%s",ex.what());
                     continue;
                 }
-            }  
-            try{
-                tf_listener_.lookupTransform(arm_id_link + "0", arm_id_+"_hand", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                robot_state_.trasform_matrices.b_T_i[INDEX::HAND] = eigen_tf.matrix();
             }
-            catch (tf::TransformException &ex) {
-                ROS_WARN("%s",ex.what());
-            }
-            try{
-                tf_listener_.lookupTransform(arm_id_link + "0", arm_id_+"_rightfinger", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                robot_state_.trasform_matrices.b_T_i[INDEX::RIGHT_FINGER] = eigen_tf.matrix();
-            }
-            catch (tf::TransformException &ex) {
-                ROS_WARN("%s",ex.what());
-            }
-            try{
-                tf_listener_.lookupTransform(arm_id_link + "0", arm_id_+"_leftfinger", ros::Time(0), tf);
-                tf::transformTFToEigen(tf, eigen_tf);
-                robot_state_.trasform_matrices.b_T_i[INDEX::LEFT_FINGER] = eigen_tf.matrix();
-            }
-            catch (tf::TransformException &ex) {
-                ROS_WARN("%s",ex.what());
-            }
+   
+                   
             // update goal transform if exists3
+            
             if(getGoalFrameExists("goal_frame")){
                 try{
-                    tf_listener_.lookupTransform(arm_id_link + "0", "goal_frame_" + arm_id_, ros::Time(0), tf);
+                    tf_listener_.lookupTransform(base_link, "goal_frame_" + arm_id_, ros::Time(0), tf);
                     tf::transformTFToEigen(tf, eigen_tf);
                     robot_state_.trasform_matrices.b_T_g =  eigen_tf.matrix();
                 }
@@ -487,7 +471,7 @@ class franka_state{
             // update teleop goal transform if exists
             if(getGoalFrameExists(arm_id_+"_teleop_frame")){
                 try{
-                    tf_listener_.lookupTransform(arm_id_link + "0", arm_id_+"_teleop_frame", ros::Time(0), tf);
+                    tf_listener_.lookupTransform(base_link, arm_id_+"_teleop_frame", ros::Time(0), tf);
                     tf::transformTFToEigen(tf, eigen_tf);
                     robot_state_.trasform_matrices.b_T_gteleop =  eigen_tf.matrix();
                 }
@@ -496,6 +480,8 @@ class franka_state{
                     return;
                 }
             }
+       
+            
         };
         void updatePointsOfInterest(){
             for(size_t i=0; i<N_JOINTS; i++){
@@ -725,21 +711,21 @@ class franka_state{
             return saturate( x_dot, saturation_velocity_);
         }
         void setSelfDistancesToZero(){
-            for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
+            for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 self_min_distances_[i] = std::numeric_limits<float>::max();
                 self_min_points_[i] = Eigen::Vector3d::Zero();
                 self_direct_points_[i] = Eigen::Vector3d::Zero();
             }
         };
         void setOthMDistancesToZero(){
-            for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
+            for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 other_min_distances_[i] = std::numeric_limits<float>::max();
                 other_min_points_[i] = Eigen::Vector3d::Zero();
                 other_direct_points_[i] = Eigen::Vector3d::Zero();
             }
         };
         void setCubeDistancesToZero(){
-            for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
+            for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 cube_min_distances_[i] = std::numeric_limits<float>::max();
                 cube_min_points_[i] = Eigen::Vector3d::Zero();
                 cube_direct_points_[i] = Eigen::Vector3d::Zero();
@@ -747,7 +733,7 @@ class franka_state{
         };
         void setTimeHandlingVariablesToZero(){
             for (size_t j=0 ; j<2; j++){
-                for (size_t i=0; i<N_JOINTS; i++){    // for each joint less EE
+                for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                     d_prev_[i][j] = std::numeric_limits<double>::max();
                     distance_of_stop_[i][j] = std::numeric_limits<double>::max();
                     inc_counter_[i][j] = 0;
