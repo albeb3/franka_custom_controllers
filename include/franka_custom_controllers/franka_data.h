@@ -281,8 +281,8 @@ class franka_state{
                         other_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
                     }
                 }
-                std::cout << "Idx: " << task.link_id << std::endl;
-                std::cout << "Other min distance link "<< idx+1 << ": " << other_min_distances_[idx] << std::endl;  
+                //std::cout << "Idx: " << task.link_id << std::endl;
+                //std::cout << "Other min distance link "<< idx+1 << ": " << other_min_distances_[idx] << std::endl;  
 
             }
             /*
@@ -449,7 +449,7 @@ class franka_state{
                     robot_state_.trasform_matrices.b_T_i[i] = tf2::transformToEigen(tf_msg).matrix();
                 }
                 catch (tf::TransformException &ex) {
-                    ROS_WARN("%s",ex.what());
+                    ROS_WARN("franka_data: %s",ex.what());
                     continue;
                 }
             }
@@ -473,7 +473,7 @@ class franka_state{
                         tf_msg = tf2_buffer_.lookupTransform(base_link, frame_name, ros::Time(0));
                         *transform_matrix = tf2::transformToEigen(tf_msg).matrix();
                     } catch (tf2::TransformException &ex) {
-                        ROS_WARN("%s", ex.what());
+                        ROS_WARN( "franka_data: %s", ex.what());
                         return;
                     }
                 }
@@ -642,12 +642,12 @@ class franka_state{
                     robot_state_.action_transitions.A_self[i](j,j)= decreasingBellShapedFunction(th_min_self_avoidance_[i], th_max_self_avoidance_[i], 0.0, 1.0, self_min_distances_[i]);
                     robot_state_.action_transitions.A_othM[i](j,j)= decreasingBellShapedFunction(th_min_other_avoidance_[i], th_max_other_avoidance_[i], 0.0, 1.0, other_min_distances_[i]);
                 }
-                std::cout << "----------------------------------------" << std::endl;
-                std::cout << "Task reference xdot hand othm: " << robot_state_.task_references.xdot_othM[INDEX::HAND].head(3).transpose() << std::endl;
+               // std::cout << "----------------------------------------" << std::endl;
+                //std::cout << "Task reference xdot hand othm: " << robot_state_.task_references.xdot_othM[INDEX::HAND].head(3).transpose() << std::endl;
                 for (size_t j=0; j<3; j++){
-                  std::cout << "Other manipulator avoidance activation hand "<< ": "<< robot_state_.action_transitions.A_othM[INDEX::HAND](j,j) << std::endl;    
+                 // std::cout << "Other manipulator avoidance activation hand "<< ": "<< robot_state_.action_transitions.A_othM[INDEX::HAND](j,j) << std::endl;    
                 }
-                std::cout << "Other min distance hand: " << other_min_distances_[INDEX::HAND] << std::endl;
+                //std::cout << "Other min distance hand: " << other_min_distances_[INDEX::HAND] << std::endl;
                 
                 
                 

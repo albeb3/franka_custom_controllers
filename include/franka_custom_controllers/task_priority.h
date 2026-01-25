@@ -4,7 +4,6 @@
 #include <std_msgs/String.h>
 #include <array>
 #include <string>
-#include <tf/transform_listener.h>
 #include <geometry_msgs/Twist.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
@@ -20,7 +19,6 @@ class task_priority{
 
     private:
     ros::NodeHandle node_handle_;
-    std::shared_ptr<tf::TransformListener> tf_listener_;
     std::unique_ptr<MissionManager> mission_manager_;
     std::unique_ptr<franka_state> robot_state_;
     iCAT_task_result icat_result_;
@@ -254,7 +252,6 @@ class task_priority{
         }
 
         mission_manager_ = std::make_unique<MissionManager>();
-        tf_listener_ = std::make_shared<tf::TransformListener>();
         robot_state_ = std::make_unique<franka_state>(node_handle_, *mission_manager_);
         
         return robot_state_->init(robot_hardware/*, arm_id */);

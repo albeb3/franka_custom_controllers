@@ -56,7 +56,7 @@ double rotation_w_=1.0;
 //--------------------------------------------------------------------------------------------------------------------------------
 // FUNCTIONS----------------------------------------------------------------------------------------------------------------------
 // Function to set the initial configuration of the control frame
-void StartConfiguration(geometry_msgs::TransformStamped start_PandaLink0_T_PandaEE){
+void SetConfiguration(geometry_msgs::TransformStamped start_PandaLink0_T_PandaEE){
     translation_x_ = start_PandaLink0_T_PandaEE.transform.translation.x;
     translation_y_ = start_PandaLink0_T_PandaEE.transform.translation.y;
     translation_z_ = start_PandaLink0_T_PandaEE.transform.translation.z;
@@ -65,99 +65,25 @@ void StartConfiguration(geometry_msgs::TransformStamped start_PandaLink0_T_Panda
     rotation_z_ = start_PandaLink0_T_PandaEE.transform.rotation.z;
     rotation_w_ = start_PandaLink0_T_PandaEE.transform.rotation.w;
 }
-void SetConfiguration(tf2_ros::Buffer& tfBuffer){
-    if (!tfBuffer.canTransform(arm_id_ + "_link0", arm_id_ + "_EE", ros::Time(0))){
-        ROS_ERROR("TF lookup failed: cannot find transform between %s and %s", (arm_id_ + "_link0").c_str(), (arm_id_ + "_EE").c_str());
-        return;
-    }
-    geometry_msgs::TransformStamped start_PandaLink0_T_PandaEE;
-    try {
-        start_PandaLink0_T_PandaEE = tfBuffer.lookupTransform(arm_id_+"_link0", arm_id_+"_EE", ros::Time(0));
-    }
-    catch (tf::TransformException &ex) {
-        ROS_ERROR("TF lookup failed: %s", ex.what());
-        return;
-    }
-    translation_x_ = start_PandaLink0_T_PandaEE.transform.translation.x;
-    translation_y_ = start_PandaLink0_T_PandaEE.transform.translation.y;
-    translation_z_ = start_PandaLink0_T_PandaEE.transform.translation.z;
-    rotation_x_ = start_PandaLink0_T_PandaEE.transform.rotation.x;
-    rotation_y_ = start_PandaLink0_T_PandaEE.transform.rotation.y;
-    rotation_z_ = start_PandaLink0_T_PandaEE.transform.rotation.z;
-    rotation_w_ = start_PandaLink0_T_PandaEE.transform.rotation.w;
-}
+
 // function to set transform matrix of EE pose wrt base frame
-void Callback_return_to_mission(const std_msgs::Bool::ConstPtr& msg){
-    if (msg->data){
-        // If return to mission command is received, reset the control frame to the initial configuration 
-        //SetConfiguration();
-        alignedTeleopFrame = true;
-    }
-    else {
-        alignedTeleopFrame = false;
-    }
-}
-void Callback_follow_EE(const std_msgs::Bool::ConstPtr& msg){
-    if (!msg->data){
-        // If no velocity command is received, reset the control frame to the current EE pose
-        //SetConfiguration(*tf_listener);
-        alignedTeleopFrame = true;
-    }
-    else {
-        alignedTeleopFrame = false;
-    }
-}
-// Saturation function to limit the maximum velocity
-double saturate(double val)
-{ 
-    if (val > limit_)   return limit_;
-    else if (val < -limit_) return -limit_;
-    else    return val;
-}
 
-// Callback function for receiving joystick translational velocity commands
-void Callback_target_translational_velocity(const geometry_msgs::Vector3::ConstPtr& msg)
-{
-    
-    translation_x_ += (deltat_*saturate(msg->z));
-    translation_y_ += (deltat_*saturate(-msg->x));
-    translation_z_ += (deltat_*saturate(msg->y));
-}
 
-// Callback function for receiving joystick angular velocity commands
-void Callback_target_angular_velocity(const geometry_msgs::Vector3::ConstPtr& msg){
-    // setting current orientation as a tf2 quaternion
-    tf2::Quaternion q_current(  rotation_x_, rotation_y_, rotation_z_, rotation_w_ ); 
-    // Calculate angle increments
-    double delta_roll = deltat_ * saturate(msg->z);
-    double delta_pitch = -deltat_ * saturate(msg->x);
-    double delta_yaw =  deltat_ * saturate(msg->y);
-    // Create a quaternion for the incremental rotation
-    tf2::Quaternion q_delta;
-    // Transform incremental angles to quaternion
-    q_delta.setRPY(delta_roll, delta_pitch, delta_yaw);
-    // Apply the incremental rotation to the current orientation
-    tf2::Quaternion q_new = q_delta * q_current;
-    // Normalize the resulting quaternion
-    q_new.normalize();
-    // Update global orientation variables
-    rotation_x_ = q_new.x();
-    rotation_y_ = q_new.y();
-    rotation_z_ = q_new.z();
-    rotation_w_ = q_new.w();
-}
+
+
 void allignTeleopFrameWithEE(tf2_ros::Buffer& tfBuffer){
-    if(tfBuffer.canTransform(arm_id_ + "_link0", arm_id_ + "_EE", ros::Time(0))){
+    //if(tfBuffer.canTransform(arm_id_ + "_link0", arm_id_ + "_EE_teleop", ros::Time(0))){
+      if(tfBuffer.canTransform("world", arm_id_ + "_EE_teleop", ros::Time(0))){
         geometry_msgs::TransformStamped start_PandaLink0_T_PandaEE;
         try {
-            start_PandaLink0_T_PandaEE = tfBuffer.lookupTransform(arm_id_ + "_link0", arm_id_ + "_EE", ros::Time(0));
+            start_PandaLink0_T_PandaEE = tfBuffer.lookupTransform("world", arm_id_ + "_EE_teleop", ros::Time(0));
         }
         catch (tf2::TransformException &ex) {
             ROS_ERROR("tf_Broadcaster: TF lookup failed: %s", ex.what());
             ros::shutdown();
             return;
         }
-    StartConfiguration(start_PandaLink0_T_PandaEE);
+    SetConfiguration(start_PandaLink0_T_PandaEE);
     return;
     }
 }
@@ -188,8 +114,8 @@ int main(int argc, char** argv){
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    setParameters(private_node);
-    //arm_id_= "panda_R"; // to be consistent with franka_example_controllers
+    //setParameters(private_node);
+    arm_id_= "panda_R"; // to be consistent with franka_example_controllers
     // Definition of TF listener and broadcaster for getting the initial pose and publishing the updated one 
    
     tf2_ros::TransformBroadcaster broadcaster;
@@ -203,17 +129,13 @@ int main(int argc, char** argv){
     // ROS Subscribers and Publishers definition
     // pub_PositionJoystick publishes the equilibrium pose to the interactive_joystick node of franka_example_controllers package (my customized version of the original interactive_marker node)
     // Subscribers for receiving target angular and translational velocities of meta joystick commands from Unity
-    ros::Subscriber sub_angular_velocity = node.subscribe("target_angular_velocity", 10, Callback_target_angular_velocity);
-    ros::Subscriber sub_translational_velocity = node.subscribe("target_translational_velocity", 10, Callback_target_translational_velocity);
-    ros::Subscriber sub_return_to_mission = node.subscribe<std_msgs::Bool>("my_joint_velocity_controller/return_to_mission/", 10,&Callback_return_to_mission);
-    ros::Subscriber sub_follow_EE = node.subscribe<std_msgs::Bool>("my_joint_velocity_controller/teleop_cmd_received/", 10,&Callback_follow_EE);
-    ros::Rate rate(100.0);
+   ros::Rate rate(100.0);
 
     while (ros::ok()){// prepare a single TransformStamped and send it
-        if(alignedTeleopFrame){
-            allignTeleopFrameWithEE(tfBuffer);
+        
+        allignTeleopFrameWithEE(tfBuffer);
             
-        }
+        
         
          // Update the pose of the control frame by integrating the received velocity commands over time
          // Integration is performed in the callback functions
@@ -221,8 +143,9 @@ int main(int argc, char** argv){
          // Prepare the TransformStamped message to be broadcasted and pubished for joystick equilibri
         
         // Update and publish the transform and pose based on the integrated velocities
-        transform_hand_displayed_.header.frame_id = arm_id_ + "_link0";
+        //transform_hand_displayed_.header.frame_id = arm_id_ + "_link0";
         transform_hand_displayed_.child_frame_id = arm_id_ + "_teleop_frame";
+        transform_hand_displayed_.header.frame_id = "world";
         transform_hand_displayed_.header.stamp = ros::Time::now();
         transform_hand_displayed_.transform.translation.x = translation_x_;
         transform_hand_displayed_.transform.translation.y = translation_y_;
@@ -232,6 +155,10 @@ int main(int argc, char** argv){
         quat.setY(rotation_y_);
         quat.setZ(rotation_z_);
         quat.setW(rotation_w_);
+        //rotate around x axis by 180 deg to have the teleop frame aligned with the EE frame
+        tf2::Quaternion rot_180_x;
+        rot_180_x.setRPY(M_PI, 0.0, 0.0);
+        quat = rot_180_x * quat;
         quat.normalize();
         geometry_msgs::Quaternion quat_msg;
         quat_msg.x = quat.x();
