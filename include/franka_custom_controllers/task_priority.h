@@ -160,7 +160,7 @@ class task_priority{
             {
             double distance_to_goal = robot_state_->getNormGoalDistance("goal_frame");
             //std::cout << "Distance to goal: " << distance_to_goal << std::endl;
-            if (distance_to_goal < 0.001 ){
+            if (distance_to_goal < 0.0001 ){
                 mission_manager_->setPhase(mission_manager_->getPhase(),2);
                
             }

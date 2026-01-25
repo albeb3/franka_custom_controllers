@@ -67,7 +67,7 @@ th_max_other_avoidance:     #[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0
   - 0.060 # H
   - 0.030 # LF
   - 0.030 # RF
-gain_teleop: 0.8
+gain_teleop: 0.4
 gain_obstacle_avoidance: 0.9
 gain_self_avoidance: 0.9
 gain_other_avoidance: 0.8
