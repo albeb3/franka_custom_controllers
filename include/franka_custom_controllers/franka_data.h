@@ -155,6 +155,7 @@ class franka_state{
         ros::Subscriber self_proximity_task_sub_;
         ros::Subscriber other_proximity_task_sub_;
         ros::Subscriber cube_proximity_task_sub_;
+        ros::Publisher unity_tf_pub_;
         // teleop variables
         bool teleop_cmd_received_= false;
         bool return_to_mission_= false;
@@ -476,6 +477,18 @@ class franka_state{
                     ROS_WARN("franka_data: %s",ex.what());
                     continue;
                 }
+            }
+
+            try{
+                tf_msg = tf2_buffer_.lookupTransform(base_link, arm_id_+"_EE", ros::Time(0));
+                geometry_msgs::Point unity_position;
+                unity_position.x = tf2::transformToEigen(tf_msg).translation().x();
+                unity_position.y = tf2::transformToEigen(tf_msg).translation().y();
+                unity_position.z = tf2::transformToEigen(tf_msg).translation().z();
+                unity_tf_pub_.publish(unity_position);
+            } catch (tf2::TransformException &ex) {
+                ROS_WARN( "franka_data: %s", ex.what());
+                return;
             }
            
             std::vector<std::pair<std::string, Eigen::Matrix4d*>> goal_frames = {
@@ -826,6 +839,7 @@ class franka_state{
             self_proximity_task_sub_ = nh_.subscribe<robot_perception::ProximityTaskArray>("proximity_tasks", 1, &franka_state::selfProximityTaskCallback, this);
             other_proximity_task_sub_ = nh_.subscribe<robot_perception::ProximityTaskArray>("proximity_tasks_other_manipulator", 1, &franka_state::otherProximityTaskCallback, this);
             cube_proximity_task_sub_ = nh_.subscribe<robot_perception::ProximityTaskArray>("proximity_tasks_cube_manipulator", 1, &franka_state::cubeProximityTaskCallback, this);
+            unity_tf_pub_ = nh_.advertise<geometry_msgs::Point>("unity_tf", 1);
             tf2_listener_= std::make_shared<tf2_ros::TransformListener>(tf2_buffer_);
         };
         ~franka_state()= default;
