@@ -192,7 +192,8 @@ class franka_state{
         std::array<std::array<int, 2>, N_LINKS> inc_counter_;
         std::array<std::array<bool, 2>, N_LINKS> moving_away_;
         std::array<std::array<float, 2>, N_LINKS> distance_of_stop_;
-
+        Eigen::Matrix<double,4,4> cTb;
+        Eigen::Vector3d b_r_c;
 
         // teleop callbacks
         void teleopCmdCallback(const std_msgs::Bool::ConstPtr& msg){
@@ -358,14 +359,14 @@ class franka_state{
         void computeJacobian(){
             // set joint limit jacobian as identity
             robot_state_.jacobians.Jjl = Eigen::Matrix<double,7,7>::Identity(); 
-            
+             b_r_c =- cTb.block<3,1>(0,3);
             // set link jacobians
             for (size_t i=0; i<N_JOINTS; i++){ // for each joint less EE
                 // set jacobian of joint i if distance to collision model < 0.1 m
                 std::array<double,42> jacobian_array= model_handle_->getZeroJacobian(Joint_frames_[i]);
                 Eigen::Map<Eigen::Matrix<double,6,7>> jacobian(jacobian_array.data());
                 // set jacobian of joint i
-                robot_state_.jacobians.J[i] = jacobian;
+                robot_state_.jacobians.J[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 /*
                  if (i >1){ // for link4 to link7
                     if  (self_min_distances_[i]<th_max_self_avoidance_ || other_min_distances_[i]<th_max_other_avoidance_ ){
@@ -384,6 +385,7 @@ class franka_state{
                 if (self_min_distances_[i]<th_max_self_avoidance_[i]){
                     // set jacobian of closest point on self collision model
                     robot_state_.jacobians.J_self[i] = computeRigidBodyJacobian(Ji_p_points_self_[i])*jacobian;
+                    robot_state_.jacobians.J_self[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
                     robot_state_.jacobians.J_self[i] = Eigen::Matrix<double,6,7>::Zero();
@@ -391,6 +393,7 @@ class franka_state{
                 if (other_min_distances_[i]<th_max_other_avoidance_[i]){
                     // set jacobian of closest point on other robot collision model
                     robot_state_.jacobians.J_othM[i] = computeRigidBodyJacobian(Ji_p_points_other_[i])*jacobian;
+                    robot_state_.jacobians.J_othM[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
                     robot_state_.jacobians.J_othM[i] = Eigen::Matrix<double,6,7>::Zero();
@@ -398,6 +401,7 @@ class franka_state{
                 if (cube_min_distances_[i]<th_max_obstacle_avoidance_[i]){
                     // set jacobian of closest point on other robot collision model
                     robot_state_.jacobians.J_cube[i] = computeRigidBodyJacobian(Ji_p_points_cube_[i])*jacobian;
+                    robot_state_.jacobians.J_cube[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
                     robot_state_.jacobians.J_cube[i] = Eigen::Matrix<double,6,7>::Zero();
@@ -414,22 +418,32 @@ class franka_state{
             // set end-effector jacobian
             std::array<double,42> jacobian_array = model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
             Eigen::Map<Eigen::Matrix<double,6,7>> jacobian(jacobian_array.data());
-            robot_state_.jacobians.Jee = jacobian;
+            robot_state_.jacobians.Jee = computeRigidBodyJacobian(b_r_c)*jacobian;
+            
                 // set teleop jacobian as end-effector jacobian
-            robot_state_.jacobians.Jteleop = jacobian;
+            robot_state_.jacobians.Jteleop = computeRigidBodyJacobian(b_r_c)*jacobian;
             
             
         };
         void computeJacobianHANDandFINGERS(){ 
             robot_state_.jacobians.J_othM[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_othM[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::HAND];
             robot_state_.jacobians.J_self[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_self[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::HAND];
             robot_state_.jacobians.J_cube[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_cube[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::HAND];
             robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER];
             robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER];
             robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER];
             robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER];
             robot_state_.jacobians.J_self[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_self[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::LEFT_FINGER];
             robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER];
         }
         void updateTransform(){
             // update end-effector transform
@@ -441,12 +455,22 @@ class franka_state{
 
             geometry_msgs::TransformStamped tf_msg;
             Eigen::Affine3d eigen_tf;
-        
+            try{
+                tf_msg = tf2_buffer_.lookupTransform("common_link", base_link, ros::Time(0));
+                eigen_tf = tf2::transformToEigen(tf_msg);
+                cTb = eigen_tf.matrix();
+            }
+            catch (tf::TransformException &ex) {
+                ROS_WARN("franka_data: %s",ex.what());
+                return;
+            }
+
             for (size_t i =0; i<N_LINKS;i++){
                 std::string child = arm_id_ + link_names_[i];
                 try{
                     tf_msg = tf2_buffer_.lookupTransform(base_link, child, ros::Time(0));
                     robot_state_.trasform_matrices.b_T_i[i] = tf2::transformToEigen(tf_msg).matrix();
+                    robot_state_.trasform_matrices.b_T_i[i] = cTb* robot_state_.trasform_matrices.b_T_i[i];
                 }
                 catch (tf::TransformException &ex) {
                     ROS_WARN("franka_data: %s",ex.what());
@@ -470,7 +494,7 @@ class franka_state{
                 }
                 if (getGoalFrameExists(frame_exist)) {
                     try {
-                        tf_msg = tf2_buffer_.lookupTransform(base_link, frame_name, ros::Time(0));
+                        tf_msg = tf2_buffer_.lookupTransform("common_link", frame_name, ros::Time(0));
                         *transform_matrix = tf2::transformToEigen(tf_msg).matrix();
                     } catch (tf2::TransformException &ex) {
                         ROS_WARN( "franka_data: %s", ex.what());
@@ -511,7 +535,7 @@ class franka_state{
                 //xdot = -cube_direct_points_[INDEX::JOINT_2] / (cube_min_distances_[INDEX::JOINT_2] + 0.3);
                 xdot = -cube_direct_points_[INDEX::JOINT_2] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = 0.9 * xdot;
-                robot_state_.task_references.xdot_cube[INDEX::JOINT_2].head(3) = xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_2].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
             robot_state_.task_references.xdot_cube[INDEX::JOINT_3].setZero();
             if (cube_min_distances_[INDEX::JOINT_3]<th_max_obstacle_avoidance_[INDEX::JOINT_3]){
@@ -520,7 +544,7 @@ class franka_state{
                 //xdot = -cube_direct_points_[INDEX::JOINT_3] / (cube_min_distances_[INDEX::JOINT_3] + 0.3);
                 xdot = -cube_direct_points_[INDEX::JOINT_3] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_5].head(3) = 0.9 * xdot;
-                robot_state_.task_references.xdot_cube[INDEX::JOINT_3].head(3) = xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_3].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
             robot_state_.task_references.xdot_cube[INDEX::JOINT_4].setZero();
             if (cube_min_distances_[INDEX::JOINT_4]<th_max_obstacle_avoidance_[INDEX::JOINT_4]){
@@ -529,7 +553,7 @@ class franka_state{
                 //xdot = -cube_direct_points_[INDEX::JOINT_4] / (cube_min_distances_[INDEX::JOINT_4] + 0.3);
                 xdot = -cube_direct_points_[INDEX::JOINT_4] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_6].head(3) = 0.9 * xdot;
-                robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = xdot;
+                robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
             
             
@@ -556,7 +580,7 @@ class franka_state{
                     //xdot = -self_direct_points_[i] / (self_min_distances_[i] + 0.3);
                     xdot = -self_direct_points_[i] * gain_self_avoidance_;
                     //robot_state_.task_references.xdot_self[i].head(3) = 0.9 * xdot;
-                    robot_state_.task_references.xdot_self[i].head(3) = xdot;
+                    robot_state_.task_references.xdot_self[i].head(3) = cTb.block<3,3>(0,0)*xdot;
                 }
                 
                     // other manipulator proximity task references
@@ -571,7 +595,7 @@ class franka_state{
                         xdot = -other_direct_points_[i] * gain_other_avoidance_;
                     }
                     //robot_state_.task_references.xdot_othM[i].head(3) = 0.9 * xdot;
-                    robot_state_.task_references.xdot_othM[i].head(3) = xdot;
+                    robot_state_.task_references.xdot_othM[i].head(3) = cTb.block<3,3>(0,0)*xdot;
                 }
                     //std::cout << "Self task xdot link "<< i+4 << ": "<< robot_state_.task_references.xdot_self[i].head(3).transpose() << std::endl;
                 //std::cout << "Gain other manipulator avoidance link "<< i+4 << ": "<< gain_other_avoidance_ << std::endl;
@@ -584,14 +608,16 @@ class franka_state{
             case 1: // reaching goal phase
                 // compute cartesian error for goal frame position
                 robot_state_.task_references.xdot_g_pos = 
-                    computeCartesianTask(robot_state_.trasform_matrices.b_T_g, robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+                    computeCartesianTask(robot_state_.trasform_matrices.b_T_g, cTb*robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+    
                 break;
             case 2: // stop phase
                 robot_state_.task_references.xdot_g_pos.setZero();
                 break; 
             case 3: // teleop phase
                 robot_state_.task_references.xdot_teleop = 
-                    computeCartesianTask(robot_state_.trasform_matrices.b_T_gteleop, robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+                    computeCartesianTask(robot_state_.trasform_matrices.b_T_gteleop, cTb*robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+               
                 break;
             default:
                 break;
@@ -1002,7 +1028,7 @@ class franka_state{
         };
         double getNormGoalDistance(std::string goal){
             if (goal == "goal_frame"){
-                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_g,robot_state_.trasform_matrices.b_T_e);
+                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_g,cTb*robot_state_.trasform_matrices.b_T_e);
                 Eigen::Matrix<double,6,1> goal_distance;
                 goal_distance.head<3>() = cart_error.pos_error;
                 goal_distance.tail<3>() = cart_error.ori_error;
@@ -1010,7 +1036,7 @@ class franka_state{
                 
                 }
             else if (goal == "teleop"){
-                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_gteleop,robot_state_.trasform_matrices.b_T_e);
+                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_gteleop,cTb*robot_state_.trasform_matrices.b_T_e);
                 Eigen::Matrix<double,6,1> goal_distance;
                 goal_distance.head<3>() = cart_error.pos_error;
                 goal_distance.tail<3>() = cart_error.ori_error;
