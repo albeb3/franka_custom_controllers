@@ -35,9 +35,9 @@ th_min_obstacle_avoidance:  #   [0.000, 0.010, 0.010, 0.000, 0.000, 0.000, 0.000
   - 0.000   # RF
 th_max_obstacle_avoidance:  #   [0.000, 0.020, 0.020, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]
   - 0.000 # J1
-  - 0.05 # J2
-  - 0.05 # J3
-  - 0.050 # J4
+  - 0.06 # J2
+  - 0.06 # J3
+  - 0.060 # J4
   - 0.000 # J5
   - 0.000 # J6
   - 0.000   # J7    
@@ -67,7 +67,7 @@ th_max_other_avoidance:     #[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0
   - 0.060 # H
   - 0.030 # LF
   - 0.030 # RF
-gain_teleop: 3.0
+gain_teleop: 0.4
 gain_obstacle_avoidance: 0.9
 gain_self_avoidance: 0.9
 gain_other_avoidance: 0.8

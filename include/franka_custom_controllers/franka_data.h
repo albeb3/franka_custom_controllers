@@ -85,8 +85,9 @@ std::vector<std::string> link_names_ = {
 
 struct Trasform_matrices{
     // Transformation matrices
-    Eigen::Matrix<double, 4,4> b_T_e,b_T_g,b_T_gteleop;
+    Eigen::Matrix<double, 4,4> c_T_e,b_T_e,b_T_g,b_T_gteleop;
     std::array<Eigen::Matrix<double,4,4>,N_LINKS> b_T_i;
+    std::array<Eigen::Matrix<double,4,4>,N_LINKS> c_T_i;
 };
 
 struct Jacobians{
@@ -163,18 +164,18 @@ class franka_state{
         // self min distances and points and directions and Ji_p points
         std::array<float,N_LINKS> self_min_distances_;
         std::array<Eigen::Vector3d,N_LINKS> self_min_points_;
-        std::array<Eigen::Vector3d,N_LINKS> self_direct_points_;
-        std::array<Eigen::Vector3d,N_LINKS> Ji_p_points_self_;
+        std::array<Eigen::Vector3d,N_LINKS> base_self_direct_points_;
+        std::array<Eigen::Vector3d,N_LINKS> base_Ji_p_points_self_;
         // other min distances and points and directions and Ji_p points
         std::array<float,N_LINKS> other_min_distances_;
         std::array<Eigen::Vector3d,N_LINKS> other_min_points_;
-        std::array<Eigen::Vector3d,N_LINKS> other_direct_points_;
-        std::array<Eigen::Vector3d,N_LINKS> Ji_p_points_other_;
+        std::array<Eigen::Vector3d,N_LINKS> base_other_direct_points_;
+        std::array<Eigen::Vector3d,N_LINKS> base_Ji_p_points_other_;
         // cube min distances and points and directions and Ji_p points
         std::array<float,N_LINKS> cube_min_distances_;
         std::array<Eigen::Vector3d,N_LINKS> cube_min_points_;
-        std::array<Eigen::Vector3d,N_LINKS> cube_direct_points_;
-        std::array<Eigen::Vector3d,N_LINKS> Ji_p_points_cube_;
+        std::array<Eigen::Vector3d,N_LINKS> base_cube_direct_points_;
+        std::array<Eigen::Vector3d,N_LINKS> base_Ji_p_points_cube_;
         // thresholds for proximity tasks
         std::array<float,N_LINKS> th_min_self_avoidance_;
         std::array<float,N_LINKS> th_max_self_avoidance_;
@@ -220,46 +221,10 @@ class franka_state{
                     if (task.distance < self_min_distances_[idx]){
                         self_min_distances_[idx] = task.distance;
                         self_min_points_[idx] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        self_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
+                        base_self_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
                     }
                 }
             }
-            /*
-            for (const auto& task : msg->proximity_tasks) {
-                if (task.link_id==arm_id_+"_link4"){ 
-                    if (task.distance < self_min_distances_[0]){ 
-                        self_min_distances_[0] = task.distance;
-                        self_min_points_[0] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        self_direct_points_[0] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Self min distance link 4: "<< self_min_distances_[0] << std::endl; 
-                    }
-                } 
-                else if(task.link_id==arm_id_+"_link5"){ 
-                    if (task.distance < self_min_distances_[1]){
-                        self_min_distances_[1] = task.distance;
-                        self_min_points_[1] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z);
-                        self_direct_points_[1] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Self min distance link 5: "<< self_min_distances_[1] << std::endl; 
-                    } 
-                }
-                else if(task.link_id==arm_id_+"_link6"){ 
-                    if (task.distance < self_min_distances_[2]){ 
-                        self_min_distances_[2] = task.distance;
-                        self_min_points_[2] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        self_direct_points_[2] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Self min distance link 6: "<< self_min_distances_[2] << std::endl; 
-                    } 
-                } 
-                else if(task.link_id==arm_id_+"_link7"){ 
-                    if (task.distance < self_min_distances_[3]){
-                        self_min_distances_[3] = task.distance;
-                        self_min_points_[3] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        self_direct_points_[3] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Self min distance link 7: "<< self_min_distances_[3] << std::endl; 
-                    } 
-                } 
-            }
-             */
             for (size_t i=0; i< self_min_distances_.size(); i++){
                 if(self_min_distances_[i]<th_max_self_avoidance_[i]){
                     //std::cout << "Self min distance link "<< i+4 << ": "<< self_min_distances_[i] << std::endl;
@@ -280,49 +245,13 @@ class franka_state{
                     if (task.distance < other_min_distances_[idx]){
                         other_min_distances_[idx] = task.distance;
                         other_min_points_[idx] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        other_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
+                        base_other_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
                     }
                 }
                 //std::cout << "Idx: " << task.link_id << std::endl;
                 //std::cout << "Other min distance link "<< idx+1 << ": " << other_min_distances_[idx] << std::endl;  
 
             }
-            /*
-             for (const auto& task : msg->proximity_tasks) {
-                if (task.link_id==arm_id_+"_link4"){ 
-                    if (task.distance < other_min_distances_[0]){ 
-                        other_min_distances_[0] = task.distance; 
-                        other_min_points_[0] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        other_direct_points_[0] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Other min distance link 4: "<< other_min_distances_[0] << std::endl; 
-                    } 
-                } 
-                else if(task.link_id==arm_id_+"_link5"){ 
-                    if (task.distance < other_min_distances_[1]){ 
-                        other_min_distances_[1] = task.distance; 
-                        other_min_points_[1] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z);
-                        other_direct_points_[1] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Other min distance link 5: "<< other_min_distances_[1] << std::endl; 
-                    } 
-                }
-                else if(task.link_id==arm_id_+"_link6"){ 
-                    if (task.distance < other_min_distances_[2]){ 
-                        other_min_distances_[2] = task.distance; 
-                        other_min_points_[2] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        other_direct_points_[2] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
-                        //std::cout << "Other min distance link 6: "<< other_min_distances_[2] << std::endl; 
-                    } 
-                } 
-                else if(task.link_id==arm_id_+"_link7"){ 
-                    if (task.distance < other_min_distances_[3]){
-                        other_min_distances_[3] = task.distance; 
-                        other_min_points_[3] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        other_direct_points_[3] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z);
-                        //std::cout << "Other min distance link 7: "<< other_min_distances_[3] << std::endl;
-                        }
-                    }
-                }
-            */
            
             for (size_t i=0; i< other_min_distances_.size(); i++){
                 if(other_min_distances_[i]<th_max_other_avoidance_[i]){
@@ -344,7 +273,7 @@ class franka_state{
                     if (task.distance < cube_min_distances_[idx]){
                         cube_min_distances_[idx] = task.distance;
                         cube_min_points_[idx] = Eigen::Vector3d(task.point.x, task.point.y, task.point.z); 
-                        cube_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
+                        base_cube_direct_points_[idx] = Eigen::Vector3d(task.direction.x, task.direction.y, task.direction.z); 
                     }
                 }
             }
@@ -368,24 +297,10 @@ class franka_state{
                 Eigen::Map<Eigen::Matrix<double,6,7>> jacobian(jacobian_array.data());
                 // set jacobian of joint i
                 robot_state_.jacobians.J[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
-                /*
-                 if (i >1){ // for link4 to link7
-                    if  (self_min_distances_[i]<th_max_self_avoidance_ || other_min_distances_[i]<th_max_other_avoidance_ ){
-                        if (self_min_distances_[i-2]<th_max_self_avoidance_){
-                            // set jacobian of closest point on self collision model
-                            robot_state_.jacobians.J_self[i-2] = computeRigidBodyJacobian(Ji_p_points_self_[i-2])*jacobian;
-                        }
-                        if (other_min_distances_[i-2]<th_max_other_avoidance_){
-                            // set jacobian of closest point on other robot collision model
-                            robot_state_.jacobians.J_othM[i-2] = computeRigidBodyJacobian(Ji_p_points_other_[i-2])*jacobian;
-                        }
-                    }
-                }
-                */
             
                 if (self_min_distances_[i]<th_max_self_avoidance_[i]){
                     // set jacobian of closest point on self collision model
-                    robot_state_.jacobians.J_self[i] = computeRigidBodyJacobian(Ji_p_points_self_[i])*jacobian;
+                    robot_state_.jacobians.J_self[i] = computeRigidBodyJacobian(base_Ji_p_points_self_[i])*jacobian;
                     robot_state_.jacobians.J_self[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
@@ -393,7 +308,7 @@ class franka_state{
                 }
                 if (other_min_distances_[i]<th_max_other_avoidance_[i]){
                     // set jacobian of closest point on other robot collision model
-                    robot_state_.jacobians.J_othM[i] = computeRigidBodyJacobian(Ji_p_points_other_[i])*jacobian;
+                    robot_state_.jacobians.J_othM[i] = computeRigidBodyJacobian(base_Ji_p_points_other_[i])*jacobian;
                     robot_state_.jacobians.J_othM[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
@@ -401,7 +316,7 @@ class franka_state{
                 }
                 if (cube_min_distances_[i]<th_max_obstacle_avoidance_[i]){
                     // set jacobian of closest point on other robot collision model
-                    robot_state_.jacobians.J_cube[i] = computeRigidBodyJacobian(Ji_p_points_cube_[i])*jacobian;
+                    robot_state_.jacobians.J_cube[i] = computeRigidBodyJacobian(base_Ji_p_points_cube_[i])*jacobian;
                     robot_state_.jacobians.J_cube[i] = computeRigidBodyJacobian(b_r_c)*jacobian;
                 }
                 else{
@@ -427,37 +342,49 @@ class franka_state{
             
         };
         void computeJacobianHANDandFINGERS(){ 
-            robot_state_.jacobians.J_othM[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //JACOBIAN HAND
+            //bimanual avoid collision
+            robot_state_.jacobians.J_othM[INDEX::HAND] = computeRigidBodyJacobian(base_Ji_p_points_other_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_othM[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::HAND];
-            robot_state_.jacobians.J_self[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //self avoid collision
+            robot_state_.jacobians.J_self[INDEX::HAND] = computeRigidBodyJacobian(base_Ji_p_points_self_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_self[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::HAND];
-            robot_state_.jacobians.J_cube[INDEX::HAND] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //cube avoid collision
+            robot_state_.jacobians.J_cube[INDEX::HAND] = computeRigidBodyJacobian(base_Ji_p_points_cube_[INDEX::HAND])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_cube[INDEX::HAND] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::HAND];
-            robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            
+            //JACOBIAN RIGHT FINGER
+            //bimanual avoid collision
+            robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_other_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::RIGHT_FINGER];
-            robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //self avoid collision
+            robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_self_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::RIGHT_FINGER];
-            robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //cube avoid collision
+            robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_cube_[INDEX::RIGHT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::RIGHT_FINGER];
-            robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_other_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            
+            //JACOBIAN LEFT FINGER
+            //bimanual avoid collision
+            robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_other_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_othM[INDEX::LEFT_FINGER];
-            robot_state_.jacobians.J_self[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_self_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //self avoid collision
+            robot_state_.jacobians.J_self[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_self_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_self[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_self[INDEX::LEFT_FINGER];
-            robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(Ji_p_points_cube_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
+            //cube avoid collision
+            robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(base_Ji_p_points_cube_[INDEX::LEFT_FINGER])*robot_state_.jacobians.J[INDEX::JOINT_7];
             robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER] = computeRigidBodyJacobian(b_r_c)*robot_state_.jacobians.J_cube[INDEX::LEFT_FINGER];
         }
-        void updateTransform(){
-            // update end-effector transform
-            franka::RobotState robot_state = state_handle_->getRobotState();
-            Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
-            robot_state_.trasform_matrices.b_T_e = transform.matrix();
- 
-            const std::string base_link = arm_id_ + "_link0";
-
+        void updateTransform(){         
+            // 
+            const std::string common_frame = "common_link";
+            const std::string base_frame = arm_id_ + "_link0";
+            
             geometry_msgs::TransformStamped tf_msg;
             Eigen::Affine3d eigen_tf;
+            // TRANSFORM FROM COMMON_LINK TO BASE_LINK--------------------
             try{
-                tf_msg = tf2_buffer_.lookupTransform("common_link", base_link, ros::Time(0));
+                tf_msg = tf2_buffer_.lookupTransform(common_frame, base_frame, ros::Time(0));
                 eigen_tf = tf2::transformToEigen(tf_msg);
                 cTb = eigen_tf.matrix();
             }
@@ -465,13 +392,19 @@ class franka_state{
                 ROS_WARN("franka_data: %s",ex.what());
                 return;
             }
+            // TRANSFORM FROM BASE_LINK TO END EFFECTOR--------------------
+            franka::RobotState robot_state = state_handle_->getRobotState();
+            Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+            robot_state_.trasform_matrices.b_T_e = transform.matrix();
+            robot_state_.trasform_matrices.c_T_e = cTb * robot_state_.trasform_matrices.b_T_e;
 
+            // UPDATE ALL LINK TRANSFORMS WRT MANIPULATOR BASE LINK--------------------
             for (size_t i =0; i<N_LINKS;i++){
                 std::string child = arm_id_ + link_names_[i];
                 try{
-                    tf_msg = tf2_buffer_.lookupTransform(base_link, child, ros::Time(0));
+                    tf_msg = tf2_buffer_.lookupTransform(base_frame, child, ros::Time(0));
                     robot_state_.trasform_matrices.b_T_i[i] = tf2::transformToEigen(tf_msg).matrix();
-                    robot_state_.trasform_matrices.b_T_i[i] = cTb* robot_state_.trasform_matrices.b_T_i[i];
+                    robot_state_.trasform_matrices.c_T_i[i] = cTb* robot_state_.trasform_matrices.b_T_i[i];
                 }
                 catch (tf::TransformException &ex) {
                     ROS_WARN("franka_data: %s",ex.what());
@@ -479,8 +412,9 @@ class franka_state{
                 }
             }
 
+            // PUBLISH EE POSITION TO UNITY--------------------
             try{
-                tf_msg = tf2_buffer_.lookupTransform(base_link, arm_id_+"_EE", ros::Time(0));
+                tf_msg = tf2_buffer_.lookupTransform(common_frame, arm_id_+"_EE", ros::Time(0));
                 geometry_msgs::Point unity_position;
                 unity_position.x = tf2::transformToEigen(tf_msg).translation().x();
                 unity_position.y = tf2::transformToEigen(tf_msg).translation().y();
@@ -490,7 +424,7 @@ class franka_state{
                 ROS_WARN( "franka_data: %s", ex.what());
                 return;
             }
-           
+            // UPDATE GOAL and TELEOP FRAMES--------------------
             std::vector<std::pair<std::string, Eigen::Matrix4d*>> goal_frames = {
                 {"goal_frame_" + arm_id_, &robot_state_.trasform_matrices.b_T_g},
                 {arm_id_+"_teleop_frame", &robot_state_.trasform_matrices.b_T_gteleop}
@@ -507,7 +441,7 @@ class franka_state{
                 }
                 if (getGoalFrameExists(frame_exist)) {
                     try {
-                        tf_msg = tf2_buffer_.lookupTransform("common_link", frame_name, ros::Time(0));
+                        tf_msg = tf2_buffer_.lookupTransform(common_frame, frame_name, ros::Time(0));
                         *transform_matrix = tf2::transformToEigen(tf_msg).matrix();
                     } catch (tf2::TransformException &ex) {
                         ROS_WARN( "franka_data: %s", ex.what());
@@ -519,18 +453,19 @@ class franka_state{
             
         };
         void updatePointsOfInterest(){
+            // DISTANCES VECTORS FROM JOINTS TO POINTS ON ITS LINK'S COLLISION MODEL OF CLOSESTS DISTANCE 
             for(size_t i=0; i<N_JOINTS; i++){
-                Ji_p_points_self_[i] = self_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
-                Ji_p_points_other_[i] = other_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
-                Ji_p_points_cube_[i] = cube_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
+                base_Ji_p_points_self_[i] = self_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
+                base_Ji_p_points_other_[i] = other_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
+                base_Ji_p_points_cube_[i] = cube_min_points_[i] - robot_state_.trasform_matrices.b_T_i[i].block<3,1>(0,3);
             }
-            Ji_p_points_self_[INDEX::HAND] = self_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
-            Ji_p_points_cube_[INDEX::HAND] = cube_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
-            Ji_p_points_other_[INDEX::HAND] = other_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
+            base_Ji_p_points_self_[INDEX::HAND] = self_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
+            base_Ji_p_points_cube_[INDEX::HAND] = cube_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
+            base_Ji_p_points_other_[INDEX::HAND] = other_min_points_[INDEX::HAND] - robot_state_.trasform_matrices.b_T_i[INDEX::JOINT_7].block<3,1>(0,3);
            
         };
         void computeTaskReference(){
-            // compute joint limit avoidance velocities
+            // JOINT LIMIT TASK REFERENCES--------------------
             for (size_t i=0; i<N_JOINTS; i++){
                 double mean_joint_position = (robot_state_.joint_lower_limits(i) + robot_state_.joint_upper_limits(i)) / 2.0;
                 if (robot_state_.q(i) < mean_joint_position){
@@ -539,14 +474,14 @@ class franka_state{
                     robot_state_.task_references.xdot_jl(i) = 0.2* (robot_state_.joint_upper_limits(i)-robot_state_.q(i) - 0.01) ;
                 }
             }
-            
 
+            // OBSTACLE PROXIMITY TASK REFERENCES--------------------
             robot_state_.task_references.xdot_cube[INDEX::JOINT_2].setZero();
             if (cube_min_distances_[INDEX::JOINT_2]<th_max_obstacle_avoidance_[INDEX::JOINT_2]){
                 std::cout << "Cube min distance link 2: "<< cube_min_distances_[INDEX::JOINT_2] << std::endl;
                 Eigen::Vector3d xdot;
-                //xdot = -cube_direct_points_[INDEX::JOINT_2] / (cube_min_distances_[INDEX::JOINT_2] + 0.3);
-                xdot = -cube_direct_points_[INDEX::JOINT_2] * gain_obstacle_avoidance_;
+                //xdot = -base_cube_direct_points_[INDEX::JOINT_2] / (cube_min_distances_[INDEX::JOINT_2] + 0.3);
+                xdot = -base_cube_direct_points_[INDEX::JOINT_2] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = 0.9 * xdot;
                 robot_state_.task_references.xdot_cube[INDEX::JOINT_2].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
@@ -554,8 +489,8 @@ class franka_state{
             if (cube_min_distances_[INDEX::JOINT_3]<th_max_obstacle_avoidance_[INDEX::JOINT_3]){
                 std::cout << "Cube min distance link 3: "<< cube_min_distances_[INDEX::JOINT_3] << std::endl;
                 Eigen::Vector3d xdot;
-                //xdot = -cube_direct_points_[INDEX::JOINT_3] / (cube_min_distances_[INDEX::JOINT_3] + 0.3);
-                xdot = -cube_direct_points_[INDEX::JOINT_3] * gain_obstacle_avoidance_;
+                //xdot = -base_cube_direct_points_[INDEX::JOINT_3] / (cube_min_distances_[INDEX::JOINT_3] + 0.3);
+                xdot = -base_cube_direct_points_[INDEX::JOINT_3] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_5].head(3) = 0.9 * xdot;
                 robot_state_.task_references.xdot_cube[INDEX::JOINT_3].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
@@ -563,14 +498,14 @@ class franka_state{
             if (cube_min_distances_[INDEX::JOINT_4]<th_max_obstacle_avoidance_[INDEX::JOINT_4]){
                 std::cout << "Cube min distance link 4: "<< cube_min_distances_[INDEX::JOINT_4] << std::endl;
                 Eigen::Vector3d xdot;
-                //xdot = -cube_direct_points_[INDEX::JOINT_4] / (cube_min_distances_[INDEX::JOINT_4] + 0.3);
-                xdot = -cube_direct_points_[INDEX::JOINT_4] * gain_obstacle_avoidance_;
+                //xdot = -base_cube_direct_points_[INDEX::JOINT_4] / (cube_min_distances_[INDEX::JOINT_4] + 0.3);
+                xdot = -base_cube_direct_points_[INDEX::JOINT_4] * gain_obstacle_avoidance_;
                 //robot_state_.task_references.xdot_cube[INDEX::JOINT_6].head(3) = 0.9 * xdot;
                 robot_state_.task_references.xdot_cube[INDEX::JOINT_4].head(3) = cTb.block<3,3>(0,0)*xdot;
             }
             
             
-            // compute self and other manipulator proximity task references
+            // SELF AND OTHER MANIPULATOR PROXIMITY TASK REFERENCES--------------------
             for (size_t i=0; i<N_JOINTS; i++){
                 /*
                 // obstacle proximity task references
@@ -578,34 +513,33 @@ class franka_state{
                 if (cube_min_distances_[i]<th_max_obstacle_avoidance_[i]){
                     std::cout << "Cube min distance link "<< i+1 << ": "<< cube_min_distances_[i] << std::endl;
                     Eigen::Vector3d xdot;
-                    //xdot = -cube_direct_points_[i] / (cube_min_distances_[i] + 0.3);
-                    xdot = -cube_direct_points_[i] * gain_obstacle_avoidance_;
+                    //xdot = -base_cube_direct_points_[i] / (cube_min_distances_[i] + 0.3);
+                    xdot = -base_cube_direct_points_[i] * gain_obstacle_avoidance_;
                     //robot_state_.task_references.xdot_cube[i].head(3) = 0.9 * xdot;
                     robot_state_.task_references.xdot_cube[i].head(3) = xdot;
                 }
                 */
                 
-                
-                // self proximity task references
+                // SELF MANIPULATOR proximity task references
                 robot_state_.task_references.xdot_self[i].setZero();
                 if (self_min_distances_[i]<th_max_self_avoidance_[i]){
                     Eigen::Vector3d xdot;
-                    //xdot = -self_direct_points_[i] / (self_min_distances_[i] + 0.3);
-                    xdot = -self_direct_points_[i] * gain_self_avoidance_;
+                    //xdot = -base_self_direct_points_[i] / (self_min_distances_[i] + 0.3);
+                    xdot = -base_self_direct_points_[i] * gain_self_avoidance_;
                     //robot_state_.task_references.xdot_self[i].head(3) = 0.9 * xdot;
                     robot_state_.task_references.xdot_self[i].head(3) = cTb.block<3,3>(0,0)*xdot;
                 }
                 
-                    // other manipulator proximity task references
+                // OTHER MANIPULATOR proximity task references
                 robot_state_.task_references.xdot_othM[i].setZero();
                 if (other_min_distances_[i]<th_max_other_avoidance_[i]){
                     Eigen::Vector3d xdot;
-                    //xdot = -other_direct_points_[i] / (other_min_distances_[i] + 0.3);
+                    //xdot = -base_other_direct_points_[i] / (other_min_distances_[i] + 0.3);
                     if (other_min_distances_[i]-th_min_other_avoidance_[i] >=0.0){
-                        xdot = -other_direct_points_[i] * gain_other_avoidance_ * (other_min_distances_[i]-th_min_other_avoidance_[i]);
+                        xdot = -base_other_direct_points_[i] * gain_other_avoidance_ * (other_min_distances_[i]-th_min_other_avoidance_[i]);
                     }
                     else {
-                        xdot = -other_direct_points_[i] * gain_other_avoidance_;
+                        xdot = -base_other_direct_points_[i] * gain_other_avoidance_;
                     }
                     //robot_state_.task_references.xdot_othM[i].head(3) = 0.9 * xdot;
                     robot_state_.task_references.xdot_othM[i].head(3) = cTb.block<3,3>(0,0)*xdot;
@@ -621,7 +555,7 @@ class franka_state{
             case 1: // reaching goal phase
                 // compute cartesian error for goal frame position
                 robot_state_.task_references.xdot_g_pos = 
-                    computeCartesianTask(robot_state_.trasform_matrices.b_T_g, cTb*robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+                    computeCartesianTask(robot_state_.trasform_matrices.b_T_g, robot_state_.trasform_matrices.c_T_e, gain_teleop_);
     
                 break;
             case 2: // stop phase
@@ -629,7 +563,7 @@ class franka_state{
                 break; 
             case 3: // teleop phase
                 robot_state_.task_references.xdot_teleop = 
-                    computeCartesianTask(robot_state_.trasform_matrices.b_T_gteleop, cTb*robot_state_.trasform_matrices.b_T_e, gain_teleop_);
+                    computeCartesianTask(robot_state_.trasform_matrices.b_T_gteleop, robot_state_.trasform_matrices.c_T_e, gain_teleop_);
                
                 break;
             default:
@@ -637,7 +571,7 @@ class franka_state{
             }
         };
         void computeActivationFunction(){
-            // Compute JOINT LIMIT activation matrix
+            // COMPUTE JOINT LIMIT ACTIVATION MATRIX -----------------------------------------------------------
             robot_state_.action_transitions.A_jl=Eigen::Matrix<double, 7, 7>::Identity();
             for (size_t i=0; i<N_JOINTS;i++){
                 robot_state_.action_transitions.A_jl(i,i)=increasingBellShapedFunction(0.9*robot_state_.joint_upper_limits(i), robot_state_.joint_upper_limits(i),
@@ -645,7 +579,7 @@ class franka_state{
                                                         decreasingBellShapedFunction(robot_state_.joint_lower_limits(i), 0.9*robot_state_.joint_lower_limits(i),
                                                                                     0.0, 1.0, robot_state_.q(i));
             }
-            // Compute AVOIDANCE activation matrices
+            // COMPUTE AVOIDANCE ACTIVATION MATRICES -----------------------------------------------------------
             for (size_t i=0; i<N_LINKS; i++){
                 // OBSTACLE AVOIDANCE
                 robot_state_.action_transitions.A_cube[i]=Eigen::Matrix<double, 6, 6>::Zero();
@@ -653,28 +587,7 @@ class franka_state{
                     robot_state_.action_transitions.A_cube[i](j,j)= decreasingBellShapedFunction(th_min_obstacle_avoidance_[i], th_max_obstacle_avoidance_[i], 0.0, 1.0, cube_min_distances_[i]);
                 }
                 
-                /*
-                for (size_t j=0; j<3; j++){
-                  std::cout << "Obstacle avoidance activation link "<< 2 << ": "<< robot_state_.action_transitions.A_cube[1](j,j) << std::endl;    
-                }
-                std::cout << "task references xdot cube link "<< 2 << ": "<< robot_state_.task_references.xdot_cube[1].head(3).transpose() << std::endl;
-                std::cout << "Cube min distance link "<< 2 << ": "<< cube_min_distances_[1] << std::endl;
-                std::cout << "----------------------------------------" << std::endl;
-                for (size_t j=0; j<3; j++){
-                  std::cout << "Obstacle avoidance activation link "<< 3 << ": "<< robot_state_.action_transitions.A_cube[2](j,j) << std::endl;
-                }
-                std::cout << "task references xdot cube link "<< 3 << ": "<< robot_state_.task_references.xdot_cube[2].head(3).transpose() << std::endl;
-                std::cout << "Cube min distance link "<< 3 << ": "<< cube_min_distances_[2] << std::endl;
-                std::cout << "----------------------------------------" << std::endl;
-                for (size_t j=0; j<3; j++){
-                  std::cout << "Obstacle avoidance activation link "<< 4 << ": "<< robot_state_.action_transitions.A_cube[3](j,j) << std::endl;
-                }
-                std::cout << "task references xdot cube link "<< 4 << ": "<< robot_state_.task_references.xdot_cube[3].head(3).transpose() << std::endl;
-                std::cout << "Cube min distance link "<< 4 << ": "<< cube_min_distances_[3] << std::endl;
-                std::cout << "----------------------------------------" << std::endl;
-                */
-                
-                // SELF AVOIDANCE
+                // SELF AND OTHER MANIPULATOR AVOIDANCE -----------------------------------------------------------
                 robot_state_.action_transitions.A_self[i]=Eigen::Matrix<double, 6, 6>::Zero();
                 robot_state_.action_transitions.A_othM[i]=Eigen::Matrix<double, 6, 6>::Zero();
                 for (size_t j=0; j<3; j++){
@@ -689,11 +602,8 @@ class franka_state{
                 //std::cout << "Other min distance hand: " << other_min_distances_[INDEX::HAND] << std::endl;
                 
                 
-                
-                
-                
                 //DA PROVARE-------------------------------------------
-                Eigen::Vector3d other_direction = other_direct_points_[i];
+                Eigen::Vector3d other_direction = base_other_direct_points_[i];
                 if (other_direction.norm() > 1e-6){
                     other_direction.normalize();
                 }
@@ -706,7 +616,7 @@ class franka_state{
                         robot_state_.action_transitions.A_othM[i](j,j)= decreasingBellShapedFunction(distance_of_stop_[i][0], distance_of_stop_[i][0]+0.001, 0.0, 1.0, other_min_distances_[i]);
                     }
                 }
-                Eigen::Vector3d cube_direction = cube_direct_points_[i];
+                Eigen::Vector3d cube_direction = base_cube_direct_points_[i];
                 if (cube_direction.norm() > 1e-6){
                     cube_direction.normalize();
                 }
@@ -723,8 +633,6 @@ class franka_state{
                 //----------------------------------------------------
                 
             }
-            
-
             
             mission_manager_.updateMissionData();
             std::vector<std::string> prev_action = mission_manager_.getPrevAction();
@@ -744,28 +652,28 @@ class franka_state{
             Eigen::Matrix<double,3,1> ori_error = cart_error.ori_error/cart_error.ori_error.norm();
             Eigen::Matrix<double, 6, 1> x_dot;
             x_dot.head(3) <<  gain * pos_error;
-            x_dot.tail(3) <<  gain * ori_error;
+            x_dot.tail(3) <<  0.5/gain * ori_error;
             return saturate( x_dot, saturation_velocity_);
         }
         void setSelfDistancesToZero(){
             for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 self_min_distances_[i] = std::numeric_limits<float>::max();
                 self_min_points_[i] = Eigen::Vector3d::Zero();
-                self_direct_points_[i] = Eigen::Vector3d::Zero();
+                base_self_direct_points_[i] = Eigen::Vector3d::Zero();
             }
         };
         void setOthMDistancesToZero(){
             for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 other_min_distances_[i] = std::numeric_limits<float>::max();
                 other_min_points_[i] = Eigen::Vector3d::Zero();
-                other_direct_points_[i] = Eigen::Vector3d::Zero();
+                base_other_direct_points_[i] = Eigen::Vector3d::Zero();
             }
         };
         void setCubeDistancesToZero(){
             for (size_t i=0; i<N_LINKS; i++){    // for each joint less EE
                 cube_min_distances_[i] = std::numeric_limits<float>::max();
                 cube_min_points_[i] = Eigen::Vector3d::Zero();
-                cube_direct_points_[i] = Eigen::Vector3d::Zero();
+                base_cube_direct_points_[i] = Eigen::Vector3d::Zero();
             }
         };
         void setTimeHandlingVariablesToZero(){
@@ -993,7 +901,7 @@ class franka_state{
             Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
             Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
             robot_state_.q = q_initial;
-            //updateTransform();
+            ////////////////////////
             setTaskReferencesToZero();
             computeJacobian();
             ////////////////////////
@@ -1002,6 +910,7 @@ class franka_state{
             setCubeDistancesToZero();
             ////////////////////////
             setTimeHandlingVariablesToZero();
+            ///////////////////////////
         }    
         void update(){
             updateTransform();
@@ -1042,7 +951,7 @@ class franka_state{
         };
         double getNormGoalDistance(std::string goal){
             if (goal == "goal_frame"){
-                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_g,cTb*robot_state_.trasform_matrices.b_T_e);
+                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_g,robot_state_.trasform_matrices.c_T_e);
                 Eigen::Matrix<double,6,1> goal_distance;
                 goal_distance.head<3>() = cart_error.pos_error;
                 goal_distance.tail<3>() = cart_error.ori_error;
@@ -1050,7 +959,7 @@ class franka_state{
                 
                 }
             else if (goal == "teleop"){
-                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_gteleop,cTb*robot_state_.trasform_matrices.b_T_e);
+                CartErrorResult cart_error = cartError( robot_state_.trasform_matrices.b_T_gteleop,robot_state_.trasform_matrices.c_T_e);
                 Eigen::Matrix<double,6,1> goal_distance;
                 goal_distance.head<3>() = cart_error.pos_error;
                 goal_distance.tail<3>() = cart_error.ori_error;

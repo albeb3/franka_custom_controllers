@@ -29,7 +29,7 @@ class task_priority{
     void updateTaskPriority( ){
         icat_result_.ydotbar = Eigen::MatrixXd::Zero(7,1);
         icat_result_.Q = Eigen::MatrixXd::Identity(7,7);
-       
+      /* 
         icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_4_CUBE),
                                     robot_state_->getJacobian(Task_name::JOINT_4_CUBE),
                                     icat_result_.Q,
@@ -49,7 +49,7 @@ class task_priority{
                                     robot_state_->getTaskReference(Task_name::JOINT_2_CUBE),
                                     0.001, 0.01, 10);
                                     
-        /*icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::HAND_OTHM),
+        icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::HAND_OTHM),
                                     robot_state_->getJacobian(Task_name::HAND_OTHM),
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
@@ -66,7 +66,7 @@ class task_priority{
                                     icat_result_.Q,
                                     icat_result_.ydotbar,
                                     robot_state_->getTaskReference(Task_name::FINGERRIGHT_OTHM),
-                                    0.001, 0.01, 10);*/
+                                    0.001, 0.01, 10);
         icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::JOINT_7_OTHM),
                                     robot_state_->getJacobian(Task_name::JOINT_7_OTHM),
                                     icat_result_.Q,
@@ -106,7 +106,7 @@ class task_priority{
                                     icat_result_.ydotbar,
                                     robot_state_->getTaskReference(Task_name::TELEOP),
                                     0.001, 0.01, 10);
-        
+        */
         icat_result_ = iCAT_Task( robot_state_->getActivationMatrix(Task_name::GOAL_MOVE),
                                     robot_state_->getJacobian(Task_name::GOAL_MOVE),
                                     icat_result_.Q,
@@ -165,7 +165,7 @@ class task_priority{
                 robot_state_->setTaskReferencesToZero();
                 double distance_to_goal = robot_state_->getNormGoalDistance("goal_frame");
                 //std::cout << "Distance to goal in stop phase: " << distance_to_goal << std::endl;
-                if (distance_to_goal >= 0.0001 && robot_state_->getReturnToMission()){
+                if (distance_to_goal >= 0.0001 || robot_state_->getReturnToMission()){
                     mission_manager_->setPhase(mission_manager_->getPhase(),1);
                 }
                 else if (robot_state_->getTeleopCmdReceived()){
@@ -190,10 +190,13 @@ class task_priority{
                 robot_state_->setTeleopCmdReceived(false);
                 
                 }
+            else if (!robot_state_->getTeleopCmdReceived())
+                {
+                mission_manager_->setPhase(mission_manager_->getPhase(),2);
+                }
             else if (distance_to_teleop_goal < 0.0001 ){
                 mission_manager_->setPhase(mission_manager_->getPhase(),2);
                 robot_state_->setTeleopCmdReceived(false);
-                
             }
             break;
             }
